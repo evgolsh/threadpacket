@@ -143,7 +143,7 @@ export function overviewPage(v: Viewer, cfg: Config, d: OverviewData): Html {
   const strip = `<div class="panel">
     <div class="t">Packets sent</div>
     <div style="display:flex;align-items:baseline;gap:8px"><span class="big">${num(sends)}</span><span class="muted small">in ${STRIP_DAYS} days</span></div>
-    <div class="small muted">${plural(d.toolTotals.threadpacket_read ?? 0, "read")} · ${plural(d.toolTotals.threadpacket_revoke ?? 0, "revoke")} · ${plural(d.toolTotals.threadpacket_inbox ?? 0, "inbox check")}</div>
+    <div class="small muted">${plural(d.toolTotals.threadpacket_read ?? 0, "read")} · ${plural(d.toolTotals.threadpacket_pickup ?? 0, "pickup")} · ${plural(d.toolTotals.threadpacket_revoke ?? 0, "revoke")} · ${plural(d.toolTotals.threadpacket_inbox ?? 0, "inbox check")}</div>
     <div class="days" role="img" aria-label="Packets sent per day, last ${STRIP_DAYS} days">${d.days
       .map((x) => `<i class="${x.sends ? "" : "zero"}" style="height:${x.sends ? Math.max(8, Math.round((100 * x.sends) / maxDay)) : 4}%" title="${esc(label(x.date))}: ${x.sends} sent"></i>`)
       .join("")}</div>

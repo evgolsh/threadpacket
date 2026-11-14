@@ -14,6 +14,7 @@ Tick what worked:
 - [ ] Sign-in page opened and accepted the username and access code
 - [ ] `threadpacket_inbox` listed packets
 - [ ] `threadpacket_read` returned a brief
+- [ ] `threadpacket_pickup` showed the sender it was picked up
 - [ ] `threadpacket_read` returned an attachment (text, image, or an original download)
 - [ ] `threadpacket_send` created a packet
 - [ ] `threadpacket_revoke` hid it

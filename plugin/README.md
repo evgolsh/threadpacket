@@ -12,7 +12,8 @@ A Threadpacket team. Create one at [threadpacket.com/join](https://threadpacket.
 
 - `threadpacket_send`: sends a packet (brief and files) to yourself, to one teammate or to the whole team.
 - `threadpacket_inbox`: lists your packets, who picked them up and who has not yet, and your unsent files.
-- `threadpacket_read`: reads a packet or one of its files. A recipient's first read shows the sender that it was picked up, in which assistant and when.
+- `threadpacket_read`: reads a packet or one of its files. Reading records nothing.
+- `threadpacket_pickup`: takes a packet on after reading it, so the sender sees it was picked up, in which assistant and when.
 - `threadpacket_upload_url`: gets a one-time upload address for a file on your computer.
 - `threadpacket_revoke`: revokes a packet you sent. Content already read cannot be recalled.
 - `threadpacket_invite`: makes an invitation link for a new teammate (team admins only).

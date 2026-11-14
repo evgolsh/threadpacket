@@ -10,6 +10,7 @@ describe("tool metadata", () => {
 
     expect(tools.threadpacket_inbox.annotations).toMatchObject({ readOnlyHint: true, destructiveHint: false, openWorldHint: false });
     expect(tools.threadpacket_read.annotations).toMatchObject({ readOnlyHint: true, destructiveHint: false, openWorldHint: false });
+    expect(tools.threadpacket_pickup.annotations).toMatchObject({ readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false });
     expect(tools.threadpacket_send.annotations).toMatchObject({ readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false });
     expect(tools.threadpacket_revoke.annotations).toMatchObject({ readOnlyHint: false, destructiveHint: true, openWorldHint: false });
     expect(tools.threadpacket_upload_url.annotations).toMatchObject({ readOnlyHint: false, destructiveHint: false, openWorldHint: false });

@@ -75,6 +75,7 @@ function toolList(): string {
     "- `threadpacket_send`: send a packet (brief and files) to a username, to `team` (everyone in the team), or to yourself.",
     "- `threadpacket_inbox`: list packets sent to you, and the files you uploaded in Packets.",
     "- `threadpacket_read`: read a packet's brief and its files, or open one of your own uploaded files that is not sent yet.",
+    "- `threadpacket_pickup`: take a packet on after reading it, so the sender sees you picked it up.",
     "- `threadpacket_upload_url`: upload a file from a computer (Codex, Claude Code, Hermes, a terminal).",
     "- `threadpacket_revoke`: revoke a packet you sent. Content already read cannot be recalled.",
     "- `threadpacket_invite`: add someone to your team and get an invitation link for them (team admins).",
@@ -485,7 +486,7 @@ Threadpacket has no AI inside: it makes no model calls, and nothing you send is 
 - **What you send:** each packet's title, brief and files, exactly as your assistant sent them, and who sent it to whom.
 - **Files you upload** in Packets or through an assistant, until you send or delete them.
 - **Sign-ins:** the assistants you connected (the name each app gives) and their refresh tokens, stored as hashes. Access tokens are not stored.
-- **Pickups:** when each recipient first read a packet in an assistant, with that assistant's name, and when they first opened it in Packets. Kept until the packet is deleted.
+- **Pickups:** when each recipient's assistant picked a packet up, with that assistant's name, and when they first opened it in Packets. Kept until the packet is deleted.
 - **Activity:** which tool was called, when, by which username, and whether it worked. Not the content.
 - **Abuse limits:** when you sign in or create a team, a hash of your IP address, to slow down guessing. It is deleted after 10 minutes.
 
@@ -708,7 +709,7 @@ function catalog(cfg: Config): Record<string, unknown> {
         url: `${f.site}/mcp/server-card`,
         description: `${ABSTRACT} Sign-in with OAuth 2.1; a person approves access.`,
         tags: ["mcp", "threadpacket", "handoff", "file-sharing", "family", "teams", "cross-assistant"],
-        capabilities: ["threadpacket_send", "threadpacket_inbox", "threadpacket_read", "threadpacket_revoke", "threadpacket_upload_url", "threadpacket_invite"],
+        capabilities: ["threadpacket_send", "threadpacket_inbox", "threadpacket_read", "threadpacket_pickup", "threadpacket_revoke", "threadpacket_upload_url", "threadpacket_invite"],
         representativeQueries: REPRESENTATIVE_QUERIES,
         trustManifest: trust,
       },

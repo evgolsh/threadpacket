@@ -59,7 +59,7 @@
             {
               "description": "Continue a packet and use its files",
               "prompt": "Continue the packet from anna about the school trip.",
-              "tools_triggered": "threadpacket_inbox, threadpacket_read",
+              "tools_triggered": "threadpacket_inbox, threadpacket_read, threadpacket_pickup",
               "expected_behavior": "Reads the School trip forms brief, names permission-slip.pdf and packing-list.md, opens the file the next step needs, and does that step."
             },
             {

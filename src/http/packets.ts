@@ -328,7 +328,7 @@ export function packetsRoutes(): Hono<{ Bindings: Env; Variables: PacketsVariabl
     const p = principalOf(s);
     const packetId = c.req.param("packet");
     try {
-      // Opening it here is a pickup in the browser, for a recipient.
+      // A recipient opening it here is noted as opened in the browser.
       const h = await svc.read(p, packetId, "browser");
       const delivery = await svc.delivery(p, packetId);
       const ready = h.attachments.filter((a) => a.state === "ready");

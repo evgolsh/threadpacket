@@ -195,8 +195,11 @@ async function seed() {
     } else {
       report.push(`kept "${item.title}" (${packetId}), expires ${fresh.expires_at}`);
     }
-    // A recipient's first read is the pickup the sender sees; a later read records nothing new.
-    if (item.pickedUp) await tool(tokens[item.to], "threadpacket_read", { packet_id: packetId });
+    // The recipient's assistant reads it and takes it on: the pickup the sender sees. A second pickup changes nothing.
+    if (item.pickedUp) {
+      await tool(tokens[item.to], "threadpacket_read", { packet_id: packetId });
+      await tool(tokens[item.to], "threadpacket_pickup", { packet_id: packetId });
+    }
   }
 
   const { unsent_files: unsent = [] } = await tool(tokens.joe, "threadpacket_inbox", { limit: 1 });

@@ -77,7 +77,7 @@ Each member can open `/packets` on your server and sign in with their username a
 - **New for you:** packets sent to them, or to the team, that they have not picked up in an assistant or opened here.
 - **Sent and received:** everything they sent or received, newest first, with All, Received and Sent filters. Each row shows who it went to or came from, its files, and its pickup status. The expiry shows only when it is less than 2 days away.
 
-A packet is picked up when a recipient's assistant first reads it, and opened when the recipient first opens it in Packets. The sender sees both for each recipient, with the assistant's name and the time, such as "Picked up by anna in ChatGPT · 2 h ago". For a packet to the team, the sender sees who has not picked it up yet. A recipient sees only their own. The sender's own reads change nothing. Their assistant gets the same status from `threadpacket_inbox`, so "Did anna get the tax letter?" has an answer.
+A packet is picked up when a recipient's assistant takes it on (`threadpacket_pickup`, after reading it), and opened when the recipient first opens it in Packets. Reading it in an assistant records nothing. The sender sees both for each recipient, with the assistant's name and the time, such as "Picked up by anna in ChatGPT · 2 h ago". For a packet to the team, the sender sees who has not picked it up yet. A recipient sees only their own. The sender's own reads change nothing. Their assistant gets the same status from `threadpacket_inbox`, so "Did anna get the tax letter?" has an answer.
 
 Opening a packet (`/packets/<pk_id>`) shows its status, the assistant prompt to continue it, its brief and its files in the page: PDFs in the browser's viewer, images, text and Markdown, each with Open and Download. The sender can revoke it there: no one can open it again, in an assistant or in Packets. What a recipient's assistant already read stays in that chat. An uploaded file opens the same way (`/packets/file/<at_id>`), for its uploader only.
 
@@ -102,6 +102,7 @@ Threadpacket is storage with a sign-in. The assistant writes a brief: the purpos
 | `threadpacket_send` | Publish a packet (brief with optional `to` and attachments, by id or by the name of an unsent file). Idempotent per `idempotency_key`. |
 | `threadpacket_inbox` | List unexpired packets, newest first, with who picked each one up, and your unsent files. |
 | `threadpacket_read` | Read a packet's brief and attachment list, or an attachment as text, image, or a 10-minute download URL. Without a packet, open one of your own unsent files the same way. |
+| `threadpacket_pickup` | Take a packet on, after reading it: the sender sees it picked up, in which assistant and when. Reading alone records nothing. |
 | `threadpacket_revoke` | Hide a packet and stop its downloads. |
 | `threadpacket_upload_url` | Create a single-use 15-minute upload URL for a local file. |
 | `threadpacket_invite` | For a team admin: add a teammate and get a one-time invitation link, valid 7 days. |

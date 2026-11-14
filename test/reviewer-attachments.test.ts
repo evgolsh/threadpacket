@@ -79,7 +79,7 @@ describe("independent attachment safety properties",()=>{
   const packet=await svc.send(owner,input([slot.id]));
   expect(packet.attachments).toHaveLength(1);
   releaseClaim.resolve();await cleanup;
-  expect((await svc.read(owner,packet.packet_id)).attachments).toHaveLength(1);
+  expect((await svc.read(owner,packet.packet_id,null)).attachments).toHaveLength(1);
   expect(await env.BLOBS.head(slot.blob_key)).not.toBeNull();
  });
 

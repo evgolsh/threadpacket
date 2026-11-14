@@ -6,8 +6,8 @@ import { ago } from "../src/console/html";
 import { ORIGIN, call, errorText, expectOk, token } from "./helpers";
 
 /**
- * Packets, redesigned around "Did she get it?": a recipient's first read in an assistant is a pickup, opening it in
- * the browser is "Opened", and the sender sees both in Packets, on the packet's page and in their assistant's
+ * Packets, redesigned around "Did she get it?": a recipient's assistant reads a packet without recording anything,
+ * then picks it up when it takes the work on (threadpacket_pickup); opening it in the browser is "Opened", and the sender sees both in Packets, on the packet's page and in their assistant's
  * inbox. A packet not yet opened is new for its recipient. The sender can revoke it in the browser. A member with
  * nothing yet sees their next steps.
  */
@@ -100,10 +100,25 @@ describe("pickups: did she get it?", () => {
     expectOk(await joe.mcp("threadpacket_read", { packet_id: id }));
     expect(await pickupCount(id)).toBe(0);
 
-    // anna's assistant reads it, twice: one pickup, named after her assistant.
+    // anna's assistant reads it: nothing is recorded, and the result says how to pick it up.
+    const read = await anna.mcp("threadpacket_read", { packet_id: id });
+    expect(read.content[0]!.text).toContain(`Not picked up yet. If you are continuing this work, call threadpacket_pickup with packet_id ${id} so joe sees you took it on.`);
+    expect(read.structuredContent!.picked_up_at).toBeNull();
     expectOk(await anna.mcp("threadpacket_read", { packet_id: id }));
-    expectOk(await anna.mcp("threadpacket_read", { packet_id: id }));
+    expect(await pickupCount(id)).toBe(0);
+    expect(rowOf(await joe.page(), "Tax letter")).toContain("Not picked up yet");
+
+    // joe cannot pick up his own packet to anna.
+    expect(errorText(await joe.mcp("threadpacket_pickup", { packet_id: id }))).toContain(`you sent ${id}: only its recipients pick it up`);
+
+    // She takes it on, twice: one pickup, named after her assistant, at the first time.
+    const first = await anna.mcp("threadpacket_pickup", { packet_id: id });
+    expect(first.content[0]!.text).toMatch(new RegExp(`^Picked up ${id} at \\d{4}-.+\\. joe sees that you picked it up\\.$`));
+    expect(first.structuredContent).toMatchObject({ packet_id: id, from: "joe", first: true });
+    const again = expectOk(await anna.mcp("threadpacket_pickup", { packet_id: id }));
+    expect(again).toMatchObject({ first: false, picked_up_at: first.structuredContent!.picked_up_at });
     expect(await pickupCount(id)).toBe(1);
+    expect((await anna.mcp("threadpacket_read", { packet_id: id })).content[0]!.text).toContain(`You picked this packet up at ${first.structuredContent!.picked_up_at}.`);
 
     const row = rowOf(await joe.page(), "Tax letter");
     expect(row).toContain("Picked up by anna</span>");
@@ -131,6 +146,16 @@ describe("pickups: did she get it?", () => {
     expect(annaAfter).not.toContain("New for you");
     expect(rowOf(annaAfter, "Tax letter")).toContain("You picked it up</span>");
     expect((await anna.mcp("threadpacket_inbox")).content[0]!.text).toContain("; picked up by you in ChatGPT at ");
+  });
+
+  it("a packet to yourself is picked up on your other assistant, and joe's own read records nothing", async () => {
+    const { people } = await family();
+    const joe = people.joe!;
+    const id = await sendTo(joe, undefined, "Budget notes");
+    expect((await joe.mcp("threadpacket_read", { packet_id: id })).content[0]!.text).toContain("call threadpacket_pickup with packet_id " + id + " so it shows as picked up.");
+    expect(await pickupCount(id)).toBe(0);
+    expect((await joe.mcp("threadpacket_pickup", { packet_id: id })).content[0]!.text).toContain("It shows as picked up in your Packets.");
+    expect((await joe.mcp("threadpacket_inbox")).content[0]!.text).toContain("; picked up by you in Claude at ");
   });
 
   it("opening it in the browser is Opened, not picked up, and it is no longer new", async () => {
@@ -162,6 +187,7 @@ describe("pickups: did she get it?", () => {
     const { joe, anna } = people as Record<"joe" | "anna" | "ben", Person>;
     const id = await sendTo(joe, "team", "Holiday packing list");
     expectOk(await anna.mcp("threadpacket_read", { packet_id: id }));
+    expectOk(await anna.mcp("threadpacket_pickup", { packet_id: id }));
     const row = rowOf(await joe.page(), "Holiday packing list");
     expect(row).toContain("To the team via Claude · Brief only");
     expect(row).toContain("Picked up by anna</span>");
@@ -197,7 +223,7 @@ describe("pickups: did she get it?", () => {
     const { people } = await family("anna");
     const { joe, anna } = people as Record<"joe" | "anna", Person>;
     const id = await sendTo(joe, "anna", "Old bank details");
-    expectOk(await anna.mcp("threadpacket_read", { packet_id: id }));
+    expectOk(await anna.mcp("threadpacket_pickup", { packet_id: id }));
     const path = `/packets/${id}/revoke`;
     expect(await (await fetchAs(`/packets/${id}`, { headers: { cookie: joe.cookie } })).text()).toContain(`<a class="btn sm danger" href="${path}">Revoke</a>`);
     expect(await (await fetchAs(`/packets/${id}`, { headers: { cookie: anna.cookie } })).text()).not.toContain(path);

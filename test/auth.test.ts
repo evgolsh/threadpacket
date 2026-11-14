@@ -65,7 +65,7 @@ describe("bearer token checks on /mcp", () => {
     const { status, body } = await rpc(await alice(), "tools/list");
     expect(status).toBe(200);
     expect(body.result.tools.map((t: any) => t.name).sort()).toEqual(
-      ["threadpacket_inbox", "threadpacket_invite", "threadpacket_read", "threadpacket_revoke", "threadpacket_send", "threadpacket_upload_url"].sort(),
+      ["threadpacket_inbox", "threadpacket_invite", "threadpacket_pickup", "threadpacket_read", "threadpacket_revoke", "threadpacket_send", "threadpacket_upload_url"].sort(),
     );
   });
 

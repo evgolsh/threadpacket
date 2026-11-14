@@ -19,7 +19,7 @@ export interface PacketRow {
 
 export type PickupVia = "assistant" | "browser";
 
-/** A recipient's first read in an assistant, or first open in the browser. */
+/** A recipient's assistant picking the packet up, or the recipient's first open in the browser. */
 export interface PickupRow {
   packet_id: string;
   /** The reader's identity. */

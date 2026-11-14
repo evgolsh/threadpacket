@@ -106,7 +106,7 @@ export function numberedName(name: string, n: number): string {
   return `${base.slice(0, 255 - suffix.length - ext.length)}${suffix}${ext}`;
 }
 
-/** A recipient's first read in an assistant (with the assistant's name), or first open in the browser. */
+/** A recipient's assistant picking the packet up (threadpacket_pickup, with the assistant's name), or the recipient's first open in the browser. */
 export interface Pickup {
   /** The reader's handle. */
   by: string;
@@ -443,16 +443,15 @@ export class HandoffService {
   }
 
   /**
-   * Notes that a recipient read the packet in an assistant or opened it in the browser, the first time each.
-   * The sender's own reads are not pickups. A failure here never stops the read.
+   * Notes that a recipient opened the packet in the browser, the first time. The sender's own opens are not
+   * noted. A failure here never stops the page.
    */
-  private async notePickup(principal: Principal, p: PacketRow, via: PickupVia): Promise<void> {
+  private async noteOpened(principal: Principal, p: PacketRow): Promise<void> {
     if (!this.isRecipient(principal.subject, p)) return;
     try {
-      const row: PickupRow = { packet_id: p.id, reader: principal.subject, via, client: via === "assistant" ? await this.clientLabel(principal.clientId) : null, at: nowIso() };
-      await this.repo.recordPickup(row);
+      await this.repo.recordPickup({ packet_id: p.id, reader: principal.subject, via: "browser", client: null, at: nowIso() });
     } catch (e) {
-      console.error("pickup not recorded", e);
+      console.error("opened not recorded", e);
     }
   }
 
@@ -492,14 +491,49 @@ export class HandoffService {
   }
 
   /**
-   * Reads a packet. A recipient's read is a pickup: in an assistant, or (`via` "browser") in Assets. `via` null
-   * reads without one (a page that only shows the packet to its sender, such as Revoke).
+   * Reads a packet. `via` "browser" notes a recipient opening it in Packets; null records nothing (an assistant's
+   * read, or a page that shows the packet to its sender, such as Revoke). An assistant picks up with pickUp.
    */
-  async read(principal: Principal, packetId: string, via: PickupVia | null = "assistant"): Promise<PacketView> {
+  async read(principal: Principal, packetId: string, via: "browser" | null): Promise<PacketView> {
     const p = await this.livePacket(principal.subject, packetId);
+    if (via) await this.noteOpened(principal, p);
+    return this.viewOf(p);
+  }
+
+  /**
+   * An assistant reads a packet; nothing is recorded. `picked_up_at`: when this caller's assistant picked it up,
+   * null if it has not yet, undefined if the caller is not a recipient (they sent it).
+   */
+  async readInAssistant(principal: Principal, packetId: string): Promise<{ view: PacketView; picked_up_at: string | null | undefined }> {
+    const p = await this.livePacket(principal.subject, packetId);
+    const view = await this.viewOf(p);
+    if (!this.isRecipient(principal.subject, p)) return { view, picked_up_at: undefined };
+    return { view, picked_up_at: (await this.ownPickup(principal.subject, p.id))?.at ?? null };
+  }
+
+  private async viewOf(p: PacketRow): Promise<PacketView> {
     const atts = await this.repo.getPacketAttachments(p.id);
-    if (via) await this.notePickup(principal, p, via);
     return { ...summary(p), brief: p.brief, attachments: atts.map(describe) };
+  }
+
+  /**
+   * The recipient's assistant takes the packet on: the sender sees it picked up, with the assistant's name and the
+   * time. Only a recipient can; a second call keeps the first time.
+   */
+  async pickUp(principal: Principal, packetId: string): Promise<{ packet_id: string; from: string; picked_up_at: string; first: boolean }> {
+    const p = await this.livePacket(principal.subject, packetId);
+    if (!this.isRecipient(principal.subject, p)) throw new HandoffError("invalid_input", `you sent ${p.id}: only its recipients pick it up`);
+    const from = handleOf(p.owner);
+    const earlier = await this.ownPickup(principal.subject, p.id);
+    if (earlier) return { packet_id: p.id, from, picked_up_at: earlier.at, first: false };
+    const at = nowIso();
+    await this.repo.recordPickup({ packet_id: p.id, reader: principal.subject, via: "assistant", client: await this.clientLabel(principal.clientId), at });
+    return { packet_id: p.id, from, picked_up_at: at, first: true };
+  }
+
+  /** This member's pickup of a packet in an assistant, if any. */
+  private async ownPickup(subject: string, packetId: string): Promise<PickupRow | undefined> {
+    return (await this.repo.getPickups([packetId])).find((k) => k.reader === subject && k.via === "assistant");
   }
 
   /** A live packet's sending assistant and who got it, for its page in Assets. */

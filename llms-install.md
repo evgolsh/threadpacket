@@ -158,7 +158,7 @@ Check for an existing MCP entry named `threadpacket` before changing client conf
 
 ## 5. Verify an actual self-packet across assistants
 
-After connection, check that the host exposes `threadpacket_send`, `threadpacket_inbox`, `threadpacket_read`, `threadpacket_upload_url` and `threadpacket_revoke`.
+After connection, check that the host exposes `threadpacket_send`, `threadpacket_inbox`, `threadpacket_read`, `threadpacket_pickup`, `threadpacket_upload_url` and `threadpacket_revoke`.
 
 Begin with text, then test files if requested:
 
