@@ -9,6 +9,11 @@ describe("tool metadata", () => {
     const tools = Object.fromEntries(body.result.tools.map((t: any) => [t.name, t]));
     // /about says "six MCP tools" (test/agents.test.ts).
     expect(body.result.tools).toHaveLength(6);
+    // Directories read the display name from annotations.title as well as the tool's title.
+    for (const t of body.result.tools) {
+      expect(t.title, t.name).toMatch(/\S/);
+      expect(t.annotations.title, t.name).toBe(t.title);
+    }
 
     expect(tools.threadpacket_inbox.annotations).toMatchObject({ readOnlyHint: true, destructiveHint: false, openWorldHint: false });
     expect(tools.threadpacket_read.annotations).toMatchObject({ readOnlyHint: true, destructiveHint: false, openWorldHint: false });

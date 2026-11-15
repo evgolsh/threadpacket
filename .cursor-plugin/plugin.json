@@ -1,6 +1,6 @@
 {
   "name": "threadpacket",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "description": "Threadpacket sends a packet from one person's AI assistant to another person's assistant: a brief of the work so far, with the original files. Hosted at threadpacket.com, or on your own private server.",
   "author": {
     "name": "Eugene Olshenbaum"

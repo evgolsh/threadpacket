@@ -136,7 +136,7 @@ export function buildMcpServer(svc: ThreadpacketService, principal: Principal, d
         attachments: z.array(attachmentDescriptorSchema),
         replayed: z.boolean().describe("True when an identical earlier request was returned instead of a new packet."),
       },
-      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+      annotations: { title: "Send a packet", readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
       _meta: { "openai/fileParams": ["files"] },
     },
     async (args) => {
@@ -193,7 +193,7 @@ export function buildMcpServer(svc: ThreadpacketService, principal: Principal, d
           .optional()
           .describe("The caller's files not yet in a packet, newest first (first page only)."),
       },
-      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+      annotations: { title: "List packets", readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     },
     async (args) => {
       try {
@@ -255,7 +255,7 @@ export function buildMcpServer(svc: ThreadpacketService, principal: Principal, d
         download_url: z.string().optional(),
         download_expires_at: z.string().optional(),
       },
-      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+      annotations: { title: "Read a packet", readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     },
     async (args) => {
       try {
@@ -339,7 +339,7 @@ export function buildMcpServer(svc: ThreadpacketService, principal: Principal, d
       description: "Revoke a packet: it leaves the inbox and can no longer be read or downloaded. Content already read by a recipient cannot be recalled.",
       inputSchema: { packet_id: z.string() },
       outputSchema: { packet_id: z.string(), revoked_at: z.string() },
-      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
+      annotations: { title: "Revoke a packet", readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
     },
     async (args) => {
       try {
@@ -369,7 +369,7 @@ export function buildMcpServer(svc: ThreadpacketService, principal: Principal, d
         expires_at: z.string(),
         new_member: z.boolean().describe("False when the username already existed."),
       },
-      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+      annotations: { title: "Invite someone", readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
     },
     async (args) => {
       try {
@@ -409,7 +409,7 @@ export function buildMcpServer(svc: ThreadpacketService, principal: Principal, d
         powershell: z.string(),
         max_bytes: z.number(),
       },
-      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+      annotations: { title: "Get an upload URL", readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
     },
     async (args) => {
       try {
