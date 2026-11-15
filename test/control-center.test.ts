@@ -4,7 +4,7 @@ import worker from "../src/index";
 import { upsertMember } from "../src/auth/builtin";
 import { base64url, sha256Hex } from "../src/domain/ids";
 import { teamOverview } from "../src/console/stats";
-import { ORIGIN } from "./helpers";
+import { ORIGIN, token } from "./helpers";
 
 /**
  * One code base, two modes. The suite runs as a private install; these cases run the same Worker with
@@ -388,5 +388,71 @@ describe("the control center", () => {
     expect((await join("", solo)).status).toBe(200);
     expect(await env.DB.prepare("SELECT handle FROM members WHERE handle = ?").bind(solo).first()).toBeNull();
     expect(await env.DB.prepare("SELECT handle FROM members WHERE handle = ?").bind(`${solo}/${solo}`).first()).toEqual({ handle: `${solo}/${solo}` });
+  });
+
+  const mcpStatus = async (bearer: string) =>
+    (
+      await fetchAs(ctl, "/mcp", {
+        method: "POST",
+        headers: { authorization: `Bearer ${bearer}`, "content-type": "application/json", accept: "application/json, text/event-stream", "mcp-protocol-version": "2025-06-18" },
+        body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list", params: {} }),
+      })
+    ).status;
+
+  it("the operator deletes another team from Tenants: its members are signed out at once, other teams stay", async () => {
+    const op = { handle: `op-${uid()}`, code: `operator-code-${uid()}` };
+    await upsertMember(env.DB, op.handle, op.code);
+    await env.DB.prepare("INSERT OR IGNORE INTO admin_members (handle) VALUES (?)").bind(op.handle).run();
+    const team = `abuse-${uid()}`;
+    const other = `${team}-x`;
+    const j = await join(team, "tim");
+    await join(other, "tim");
+    const theirs = await token(`${team}/tim`);
+    const ours = await token(`${other}/tim`);
+    expect(await mcpStatus(theirs)).toBe(200);
+
+    const s = await consoleSession(ctl, { handle: op.handle, access_code: op.code });
+    expect((await s.page("/console/tenants")).text).toContain(`href="/console/tenants/${team}/delete">Delete team…</a>`);
+    const confirm = await s.page(`/console/tenants/${team}/delete`);
+    expect(confirm.text).toContain(`Delete team ${team}?`);
+    expect(confirm.text).toContain("This cannot be undone.");
+    // Without the session's CSRF value nothing happens.
+    expect((await fetchAs(ctl, `/console/tenants/${team}/delete`, form({}, { cookie: s.cookie }))).status).toBe(403);
+    expect((await s.page(`/console/tenants/no-such-${uid()}/delete`)).status).toBe(404);
+
+    const res = await s.submit(`/console/tenants/${team}/delete`);
+    expect(res.status).toBe(303);
+    expect(res.headers.get("location")).toBe(`/console/tenants?did=deleted&team=${team}`);
+    const after = (await s.page(res.headers.get("location")!)).text;
+    expect(after).toContain(`Deleted team ${team}.`);
+    expect(after).not.toContain(`<strong>${team}</strong>`);
+    expect(after).toContain(`<strong>${other}</strong>`);
+
+    expect(await env.DB.prepare("SELECT 1 AS ok FROM tenants WHERE slug = ?").bind(team).first()).toBeNull();
+    expect(await env.DB.prepare("SELECT COUNT(*) AS n FROM members WHERE handle LIKE ?").bind(`${team}/%`).first()).toEqual({ n: 0 });
+    // Signed out at once: the assistant's token is refused, and the browser session is gone.
+    expect(await mcpStatus(theirs)).toBe(401);
+    expect((await withCookie(ctl, j.cookie!.split(";")[0]!).page("/console/overview")).location).toMatch(/^\/login/);
+    // The other team and the operator carry on.
+    expect(await mcpStatus(ours)).toBe(200);
+    expect((await s.page("/console/tenants")).status).toBe(200);
+    const event = await env.DB.prepare("SELECT outcome, detail FROM events WHERE kind = 'console' AND name = 'delete_team' AND subject = ?").bind(op.handle).first<{ outcome: string; detail: string }>();
+    expect(event?.outcome).toBe("ok");
+    expect(JSON.parse(event!.detail)).toEqual({ team });
+  });
+
+  it("a team's admin cannot reach the operator's delete route, for another team or their own", async () => {
+    const team = `eta-${uid()}`;
+    const other = `${team}-b`;
+    const s = withCookie(ctl, (await join(team, "tim")).cookie!.split(";")[0]!);
+    await join(other, "ann");
+    for (const target of [other, team]) {
+      expect((await s.page(`/console/tenants/${target}/delete`)).location).toBe("/console/overview");
+      const res = await s.submit(`/console/tenants/${target}/delete`);
+      expect(res.status).toBe(303);
+      expect(res.headers.get("location")).toBe("/console/overview");
+      expect(await env.DB.prepare("SELECT slug FROM tenants WHERE slug = ?").bind(target).first()).toEqual({ slug: target });
+    }
+    expect(await env.DB.prepare("SELECT 1 AS ok FROM events WHERE kind = 'console' AND name = 'delete_team' AND subject = ?").bind(`${team}/tim`).first()).toBeNull();
   });
 });

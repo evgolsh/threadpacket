@@ -1,6 +1,6 @@
 {
   "name": "threadpacket",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "private": true,
   "type": "module",
   "description": "Threadpacket sends a packet from one person's AI assistant to another person's assistant: a brief of the work so far, with the original files.",

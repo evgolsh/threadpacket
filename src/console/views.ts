@@ -318,7 +318,7 @@ export function codePage(v: Viewer, handle: string, code: string, kind: "added" 
 
 export function confirmPage(
   v: Viewer,
-  page: "overview" | "members" | "assistants",
+  page: "overview" | "members" | "assistants" | "tenants",
   o: { title: string; text: Html; action: string; fields?: Record<string, string>; button: string; danger?: boolean; back: string },
 ): Html {
   const hidden = Object.entries(o.fields ?? {})
@@ -459,6 +459,7 @@ const AUDIT: Record<string, string> = {
   member_remove: "removed member",
   disconnect: "disconnected an assistant of",
   cleanup: "ran cleanup",
+  delete_team: "deleted team",
 };
 
 /** This version and what the daily update check learned (src/update-check.ts). */
@@ -556,7 +557,7 @@ export function opsPage(v: Viewer, cfg: Config, d: OpsData, note: string | null)
       d.audit.length
         ? d.audit
             .map((e) => {
-              const member = detailOf(e).member;
+              const member = detailOf(e).member ?? detailOf(e).team;
               const target = typeof member === "string" ? ` <strong>${esc(member)}</strong>` : "";
               const client = e.client_id ? ` <span class="muted">· ${esc(clientName(d.clients, e.client_id))}</span>` : "";
               return `<tr><td class="nowrap">${when(e.ts, now)}</td><td>${who(e.subject)}</td><td>${esc(AUDIT[e.name ?? ""] ?? e.name ?? "")}${target}${client}</td><td>${outcome(e.outcome)}</td></tr>`;
@@ -580,7 +581,7 @@ ${audit}`,
 }
 
 /** The control center's operator page: every tenant, the users KPI, instances in the wild, Deploy clicks. */
-export function tenantsPage(v: Viewer, d: ControlCenterData): Html {
+export function tenantsPage(v: Viewer, d: ControlCenterData, note: string | null = null): Html {
   const now = d.now;
   const tile = (label: string, value: string, sub = "") => `<div class="panel"><div class="small muted">${esc(label)}</div><div style="font-size:26px;font-weight:600;letter-spacing:-.02em">${value}</div>${sub ? `<div class="small muted">${sub}</div>` : ""}</div>`;
   const tiles = `<section class="grid3">
@@ -599,13 +600,13 @@ export function tenantsPage(v: Viewer, d: ControlCenterData): Html {
   </div>`;
   const tenants = `<section class="panel flush scroll">
     <table>
-      <thead><tr><th>team</th><th>created</th><th class="r">members</th><th class="r">live packets</th><th class="r">reads 7d</th><th>last seen</th></tr></thead>
+      <thead><tr><th>team</th><th>created</th><th class="r">members</th><th class="r">live packets</th><th class="r">reads 7d</th><th>last seen</th><th></th></tr></thead>
       <tbody>${
         d.tenants.length
           ? d.tenants
-              .map((t) => `<tr><td><strong>${esc(t.slug)}</strong>${t.name !== t.slug ? ` <span class="muted">${esc(t.name)}</span>` : ""}</td><td class="nowrap">${when(t.created_at, now)}</td><td class="r">${num(t.members)}</td><td class="r">${num(t.packets_live)}</td><td class="r">${num(t.reads_7d)}</td><td class="nowrap">${when(t.last_seen, now)}</td></tr>`)
+              .map((t) => `<tr><td><strong>${esc(t.slug)}</strong>${t.name !== t.slug ? ` <span class="muted">${esc(t.name)}</span>` : ""}</td><td class="nowrap">${when(t.created_at, now)}</td><td class="r">${num(t.members)}</td><td class="r">${num(t.packets_live)}</td><td class="r">${num(t.reads_7d)}</td><td class="nowrap">${when(t.last_seen, now)}</td><td class="r"><a class="u small" href="/console/tenants/${esc(t.slug)}/delete">Delete team…</a></td></tr>`)
               .join("")
-          : `<tr><td colspan="6" class="muted">No teams yet. They sign up at <a href="/join">/join</a>.</td></tr>`
+          : `<tr><td colspan="7" class="muted">No teams yet. They sign up at <a href="/join">/join</a>.</td></tr>`
       }</tbody>
     </table>
   </section>`;
@@ -617,6 +618,7 @@ export function tenantsPage(v: Viewer, d: ControlCenterData): Html {
     <div class="panel"><div class="t">Assistants seen, 28 days</div>${list(d.assistants.map((r) => ({ k: r.name, n: r.n })), "No assistant has connected yet.")}<div class="small muted" style="margin-top:8px">distinct identities per assistant name announced at connect</div></div>
   </section>`;
   return shell("tenants", v, "Tenants", `${head("Control center", "every team on this deployment, the users KPI, private instances that check in, Deploy clicks")}
+${flash(note)}
 ${tiles}
 ${strip}
 ${tenants}

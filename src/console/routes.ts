@@ -3,7 +3,7 @@ import { bodyLimit } from "hono/body-limit";
 import type { Variables } from "../app";
 import type { Env } from "../env";
 import { codeRecord, constantTimeEqual, isValidHandle, isValidIdentity, isValidNewHandle, newAccessCode, normalizeHandle } from "../auth/builtin";
-import { handleOf, qualify, tenantOf } from "../domain/tenant";
+import { handleOf, isValidTenant, qualify, tenantOf } from "../domain/tenant";
 import { runCleanup } from "../cleanup";
 import { base64url, nowIso, sha256Hex } from "../domain/ids";
 import { recordEvent, revokeAccess } from "../store/events";
@@ -147,7 +147,7 @@ export function consoleRoutes(): Hono<{ Bindings: Env; Variables: ConsoleVariabl
       : html(overviewPage(v, c.get("cfg"), await overview(c.env, c.get("cfg"))));
   });
 
-  // A hosted team's admin deletes the whole team. Nobody else can: the people who run Threadpacket do not.
+  // A hosted team's admin deletes the whole team. The operator can delete a team too, from Tenants (below).
   app.get("/console/team/delete", (c) => {
     const v = vw(c);
     if (!v.tenant) return redirect("/console/overview");
@@ -179,7 +179,39 @@ export function consoleRoutes(): Hono<{ Bindings: Env; Variables: ConsoleVariabl
   app.get("/console/tenants", async (c) => {
     const v = vw(c);
     if (!v.control || v.tenant !== "") return redirect("/console/overview");
-    return html(tenantsPage(v, await controlCenter(c.env.DB)));
+    const team = c.req.query("team") ?? "";
+    const note = c.req.query("did") === "deleted" && isValidTenant(team) ? `Deleted team ${team}. Its members were signed out, and its packets and files are deleted within 7 days.` : null;
+    return html(tenantsPage(v, await controlCenter(c.env.DB), note));
+  });
+
+  // The operator deletes a team that abuses the service: the same deletion its own admin can make. Operator only;
+  // a team's admin is sent to their overview.
+  app.use("/console/tenants/*", async (c, next) => (c.get("cfg").mode === "control" && !tenantOfSession(c.get("session")) ? next() : redirect("/console/overview")));
+  const existingTeam = async (db: D1Database, team: string) =>
+    isValidTenant(team) && (await db.prepare("SELECT 1 AS ok FROM tenants WHERE slug = ?").bind(team).first()) !== null ? team : null;
+
+  app.get("/console/tenants/:team/delete", async (c) => {
+    const team = await existingTeam(c.env.DB, c.req.param("team"));
+    if (!team) return notFound();
+    return html(
+      confirmPage(vw(c), "tenants", {
+        title: `Delete team ${team}?`,
+        text: `Every member of <strong>${esc(team)}</strong> is removed and signed out at once, in the browser and in every assistant. Every packet the team sent or received stops working, and its packets and files are deleted within 7 days. This cannot be undone.`,
+        action: `/console/tenants/${team}/delete`,
+        button: "Delete team",
+        danger: true,
+        back: "/console/tenants",
+      }),
+    );
+  });
+
+  app.post("/console/tenants/:team/delete", async (c) => {
+    const db = c.env.DB;
+    const team = await existingTeam(db, c.req.param("team"));
+    if (!team) return notFound();
+    await deleteTeam(db, team);
+    await recordEvent(db, { kind: "console", name: "delete_team", subject: c.get("session").handle, outcome: "ok", detail: { team } });
+    return redirect(`/console/tenants?did=deleted&team=${encodeURIComponent(team)}`);
   });
 
   // ---- members ----

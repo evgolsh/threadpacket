@@ -1,7 +1,7 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "threadpacket",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Threadpacket sends a packet from one person's AI assistant to another person's assistant: a brief of the work so far, with the original files. Hosted at threadpacket.com, or on your own private server.",
   "author": {
     "name": "Eugene Olshenbaum",

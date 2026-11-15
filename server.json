@@ -3,7 +3,7 @@
   "name": "io.github.evgolsh/threadpacket",
   "title": "Threadpacket",
   "description": "Send a packet of notes and original files from one AI assistant to another person's assistant.",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "websiteUrl": "https://threadpacket.com",
   "icons": [
     {
