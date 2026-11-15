@@ -1,0 +1,19 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "threadpacket",
+  "owner": {
+    "name": "Eugene Olshenbaum"
+  },
+  "metadata": {
+    "description": "Threadpacket for Claude Code: send a packet of your work, with the original files, to another person's AI assistant."
+  },
+  "plugins": [
+    {
+      "name": "threadpacket",
+      "source": "./plugin",
+      "description": "Send a packet from your AI assistant to another person's assistant: a brief of the work so far, with the original files. Connects to threadpacket.com.",
+      "category": "productivity",
+      "homepage": "https://threadpacket.com"
+    }
+  ]
+}

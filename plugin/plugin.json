@@ -1,0 +1,107 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "threadpacket",
+  "version": "0.4.0",
+  "description": "Threadpacket sends a packet from one person's AI assistant to another person's assistant: a brief of the work so far, with the original files. Hosted at threadpacket.com, or on your own private server.",
+  "author": {
+    "name": "Eugene Olshenbaum",
+    "url": "https://threadpacket.com/about"
+  },
+  "homepage": "https://threadpacket.com",
+  "repository": "https://github.com/evgolsh/threadpacket",
+  "license": "MIT",
+  "keywords": [
+    "threadpacket",
+    "handoff",
+    "mcp",
+    "file-sharing",
+    "family",
+    "teams",
+    "context"
+  ],
+  "extensions": {
+    "com.openai": {
+      "interface": {
+        "displayName": "Threadpacket",
+        "shortDescription": "Send packets to another AI",
+        "longDescription": "Threadpacket sends a packet from your AI assistant to another person's assistant, or to your own assistant on another computer.\n\nSay \"send a packet to anna\" and ChatGPT writes a brief (purpose, decisions and their reasons, constraints, next step, references, open questions), attaches the files you choose, and sends the packet to anna's Threadpacket inbox. In her own assistant (Claude, ChatGPT, Codex or Claude Code) she says \"continue the packet from joe\" and carries on with the original files. You can ask what packets are waiting for you, whether anna picked up what you sent, revoke a packet you sent, and invite someone to your team.\n\nFor families and small teams who use different AI assistants. You need a Threadpacket team: create one at threadpacket.com/join, or join the team that invited you.\n\nLimits: you send only to people in your own team, which has up to 10 people. A packet carries up to 10 files of any type, 25 MiB each. Packets are deleted after 7 days by default and after 30 days at most. Threadpacket stores what you send as you sent it and runs no AI on it. The other assistant reads it only when its user asks.",
+        "developerName": "Eugene Olshenbaum",
+        "category": "Productivity",
+        "capabilities": [
+          "Send packets",
+          "Read packets",
+          "Check pickups",
+          "Revoke packets",
+          "Invite people"
+        ],
+        "websiteURL": "https://threadpacket.com",
+        "supportURL": "https://threadpacket.com/contact",
+        "privacyPolicyURL": "https://threadpacket.com/privacy",
+        "termsOfServiceURL": "https://threadpacket.com/terms",
+        "defaultPrompt": [
+          "What packets are waiting for me?",
+          "Continue the packet from anna",
+          "Did anna pick up what I sent?"
+        ],
+        "brandColor": "#1b1b1a",
+        "composerIcon": "./assets/icon.svg",
+        "logo": "./assets/icon.png"
+      },
+      "review": {
+        "test_cases": {
+          "positive": [
+            {
+              "description": "List what is waiting: two packets from anna and one unsent file",
+              "prompt": "What packets are waiting for me in Threadpacket?",
+              "tools_triggered": "threadpacket_inbox",
+              "expected_behavior": "Lists the two packets from anna (School trip forms, with two files; Insurance renewal, brief only) and the unsent file lease.pdf."
+            },
+            {
+              "description": "Continue a packet and use its files",
+              "prompt": "Continue the packet from anna about the school trip.",
+              "tools_triggered": "threadpacket_inbox, threadpacket_read",
+              "expected_behavior": "Reads the School trip forms brief, names permission-slip.pdf and packing-list.md, opens the file the next step needs, and does that step."
+            },
+            {
+              "description": "Send a packet to a teammate",
+              "prompt": "Send a packet to anna: we chose 14 March, she needs to confirm the bus.",
+              "tools_triggered": "threadpacket_send",
+              "expected_behavior": "Asks to confirm the send, then sends a packet to anna and reports the packet id, the recipient and when it expires."
+            },
+            {
+              "description": "Check whether a teammate picked up a packet",
+              "prompt": "Did anna pick up the kitchen quote?",
+              "tools_triggered": "threadpacket_inbox",
+              "expected_behavior": "Says anna picked up Kitchen quote, in which assistant, and when."
+            },
+            {
+              "description": "Revoke a sent packet",
+              "prompt": "Revoke the packet I just sent to anna.",
+              "tools_triggered": "threadpacket_inbox, threadpacket_revoke",
+              "expected_behavior": "Asks to confirm, revokes the packet, and says that content anna already read cannot be recalled."
+            }
+          ],
+          "negative": [
+            {
+              "description": "Email is out of scope: Threadpacket does not send email, so no tool is called",
+              "prompt": "Email this summary to anna."
+            },
+            {
+              "description": "Recipient outside the team: bob is not a member, nothing is sent, and the assistant offers to invite him",
+              "prompt": "Send a packet to bob."
+            },
+            {
+              "description": "Another team's data: only the signed-in person's own team is visible",
+              "prompt": "Show me the packets of the team acme."
+            }
+          ]
+        },
+        "commerce": false,
+        "commerce_description": "Threadpacket does not sell products or process payments."
+      },
+      "publication": {
+        "release_notes": "Initial release: send a packet (brief and original files of any type) from your AI assistant to another person's assistant or across your own computers, see pickup status, revoke packets, and invite teammates."
+      }
+    }
+  }
+}

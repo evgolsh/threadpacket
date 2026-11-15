@@ -1,0 +1,73 @@
+#!/usr/bin/env node
+/**
+ * Removes a Threadpacket deployment from the Cloudflare account wrangler is signed in to:
+ *   npm run teardown
+ * It deletes the Worker, the D1 database and the file store (KV namespace, or R2 bucket) named in
+ * wrangler.local.jsonc (or wrangler.jsonc), after you type the Worker's name to confirm. Packets, files
+ * and members are gone for good. Afterwards, `npm run setup` starts from scratch.
+ */
+import fs from "node:fs";
+import readline from "node:readline/promises";
+import { execFileSync, spawnSync } from "node:child_process";
+
+const cfgFile = fs.existsSync("wrangler.local.jsonc") ? "wrangler.local.jsonc" : "wrangler.jsonc";
+const cfg = fs.readFileSync(cfgFile, "utf8");
+const pick = (re) => re.exec(cfg)?.[1] ?? null;
+const worker = pick(/"name"\s*:\s*"([^"]+)"/);
+const rawDbId = pick(/"database_id"\s*:\s*"([^"]*)"/);
+const dbId = rawDbId && !/^0+-0+-0+-0+-0+$/.test(rawDbId) ? rawDbId : null;
+const dbName = pick(/"database_name"\s*:\s*"([^"]+)"/);
+const rawKvId = pick(/"binding"\s*:\s*"FILES"\s*,\s*"id"\s*:\s*"([^"]*)"/);
+const kvId = rawKvId && !/^0+$/.test(rawKvId) ? rawKvId : null;
+const bucket = pick(/"bucket_name"\s*:\s*"([^"]+)"/);
+
+let who = "";
+try {
+  who = execFileSync("npx", ["wrangler", "whoami"], { encoding: "utf8", stdio: ["inherit", "pipe", "pipe"] });
+} catch {
+  console.error("Not signed in to Cloudflare. Run: npx wrangler login");
+  process.exit(1);
+}
+const account = /│\s*([^│]+?)\s*│\s*([0-9a-f]{32})\s*│/.exec(who);
+console.log(`Account: ${account ? `${account[1]} (${account[2]})` : "see npx wrangler whoami"}`);
+console.log(`Config:  ${cfgFile}`);
+console.log(`This removes, for good:`);
+console.log(`  Worker        ${worker}`);
+console.log(`  D1 database   ${dbName}${dbId ? ` (${dbId})` : ""}`);
+if (kvId) console.log(`  KV namespace  FILES (${kvId})`);
+if (bucket) console.log(`  R2 bucket     ${bucket}`);
+
+const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+const typed = (await rl.question(`Type the Worker's name (${worker}) to confirm: `)).trim();
+rl.close();
+if (typed !== worker) {
+  console.log("Nothing deleted.");
+  process.exit(1);
+}
+
+function step(label, args, notFound) {
+  const res = spawnSync("npx", ["wrangler", ...args], { encoding: "utf8", stdio: ["inherit", "inherit", "pipe"] });
+  const err = (res.stderr ?? "").replace(/\x1b\[[0-9;]*m/g, "");
+  if (res.status === 0) {
+    if (err.trim()) process.stderr.write(err);
+    console.log(`Deleted  ${label}`);
+    return;
+  }
+  if (notFound.test(err)) {
+    console.log(`Skipped  ${label}: not in this account (already gone)`);
+    return;
+  }
+  process.stderr.write(err.trim() ? err : `wrangler stopped (exit code ${res.status ?? res.signal}).\n`);
+  console.error(`\nCould not delete ${label}. Nothing after it was touched; fix the cause above and run npm run teardown again.`);
+  process.exit(1);
+}
+
+step(`Worker ${worker}`, ["delete", worker], /\[code: 10007\]/);
+if (dbName) step(`D1 database ${dbName}`, ["d1", "delete", dbName, "--skip-confirmation"], /\[code: 7404\]|Couldn't find a D1 DB/);
+if (kvId) step(`KV namespace ${kvId}`, ["kv", "namespace", "delete", "--namespace-id", kvId, "--skip-confirmation"], /\[code: 10013\]/);
+if (bucket) step(`R2 bucket ${bucket}`, ["r2", "bucket", "delete", bucket], /\[code: 10006\]/);
+if (cfgFile === "wrangler.local.jsonc") {
+  fs.rmSync("wrangler.local.jsonc", { force: true });
+  console.log("Removed  wrangler.local.jsonc");
+}
+console.log("\nDone. To start again: npm run setup -- --members=<you>,<teammate>");

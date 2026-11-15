@@ -1,0 +1,34 @@
+import path from "node:path";
+import { defineConfig } from "vitest/config";
+import { cloudflareTest, readD1Migrations } from "@cloudflare/vitest-plugin";
+import privateJwk from "./test/fixtures/test-private-jwk.json" with { type: "json" };
+
+export default defineConfig(async () => {
+  const migrations = await readD1Migrations(path.join(import.meta.dirname, "migrations"));
+  return {
+    test: {
+      include: ["test/**/*.test.ts"],
+      setupFiles: ["./test/setup.ts"],
+      testTimeout: 20_000,
+    },
+    plugins: [
+      cloudflareTest({
+        wrangler: { configPath: "./wrangler.jsonc" },
+        miniflare: {
+          // The suite runs on R2 by default (test/kv-store.test.ts covers KV, the default of a self-hosted install).
+          r2Buckets: ["BLOBS"],
+          bindings: {
+            TEST_MIGRATIONS: migrations,
+            PUBLIC_URL: "https://threadpacket.test",
+            // The Worker is the issuer. The test key signs its tokens, so test/helpers.ts can mint them too.
+            OAUTH_SIGNING_JWK: JSON.stringify(privateJwk),
+            THREADPACKET_ENV: "production",
+            MAX_ATTACHMENT_BYTES: String(1024 * 1024),
+            // The suite must not reach the network: the daily update check is off unless a test turns it on.
+            THREADPACKET_UPDATE_CHECK: "off",
+          },
+        },
+      }),
+    ],
+  };
+});

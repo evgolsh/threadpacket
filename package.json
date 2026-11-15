@@ -1,0 +1,58 @@
+{
+  "name": "threadpacket",
+  "version": "0.4.0",
+  "private": true,
+  "type": "module",
+  "description": "Threadpacket sends a packet from one person's AI assistant to another person's assistant: a brief of the work so far, with the original files.",
+  "scripts": {
+    "dev": "wrangler dev",
+    "build": "node scripts/assets.mjs",
+    "deploy": "node scripts/run-deploy.mjs",
+    "setup": "node scripts/deploy.mjs",
+    "member:add": "node scripts/member.mjs",
+    "admin": "node scripts/admin.mjs",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "db:migrate:local": "wrangler d1 migrations apply DB --local",
+    "db:migrate:remote": "wrangler d1 migrations apply DB --remote",
+    "assets": "node scripts/assets.mjs",
+    "predev": "npm run assets",
+    "pretest": "npm run assets",
+    "predeploy": "npm run assets",
+    "deploy:hosted": "wrangler d1 migrations apply DB --remote -c wrangler.hosted.jsonc && wrangler deploy -c wrangler.hosted.jsonc",
+    "predeploy:hosted": "npm run assets",
+    "teardown": "node scripts/teardown.mjs",
+    "images": "npm run assets && node scripts/images.mjs",
+    "video": "npm run assets && node scripts/demo-video/render.mjs",
+    "pack:plugin": "node scripts/pack-plugin.mjs"
+  },
+  "license": "MIT",
+  "cloudflare": {
+    "bindings": {
+      "DB": {
+        "description": "D1 database for packets, attachment records, members, sign-ins and console activity. Created for you."
+      },
+      "FILES": {
+        "description": "Workers KV namespace for the original files sent with a packet, of any type. Created for you; on the free plan."
+      },
+      "THREADPACKET_SETUP_CODE": {
+        "description": "A code you choose, 12 characters or more (for example from `openssl rand -base64 18`). After deploying, open `/console/setup` on your Worker and enter it to become the admin. It works only while no admin exists."
+      }
+    }
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "hono": "^4.13.13",
+    "jose": "^6.2.13",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-plugin": "^1.4.7",
+    "@cloudflare/workers-types": "^5.20261024.1",
+    "@fontsource/ibm-plex-mono": "5.3.0",
+    "@fontsource/ibm-plex-sans": "5.3.0",
+    "typescript": "^5.9.3",
+    "vitest": "^5.0.5",
+    "wrangler": "^4.152.0"
+  }
+}

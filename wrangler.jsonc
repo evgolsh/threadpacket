@@ -1,0 +1,38 @@
+{
+  // Threadpacket: hosted MCP service on Cloudflare Workers. One deployment profile (Workers + D1 + KV).
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "threadpacket",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-09-01",
+  "compatibility_flags": ["nodejs_compat"],
+  // Invocation logs record each request URL, which can carry upload and download tickets. Keep only our own logs.
+  "observability": { "enabled": true, "logs": { "enabled": true, "invocation_logs": false } },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "threadpacket",
+      // Placeholder id. `npm run setup` writes your database id to gitignored wrangler.local.jsonc; the Deploy to Cloudflare button sets this in your fork.
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "migrations_dir": "migrations"
+    }
+  ],
+  // Files live in Workers KV: on the free plan, no payment method needed. `npm run setup` writes your namespace id to
+  // wrangler.local.jsonc; the Deploy to Cloudflare button sets this in your fork. An R2 bucket bound as BLOBS is used
+  // instead when present (docs/DEPLOY.md, "Files").
+  "kv_namespaces": [{ "binding": "FILES", "id": "00000000000000000000000000000000" }],
+  // Static files (fonts, from npm run assets). Served before the Worker for exact paths.
+  "assets": { "directory": "./public", "binding": "ASSETS" },
+  // The deployed version id and time, shown on the console's Ops page.
+  "version_metadata": { "binding": "CF_VERSION_METADATA" },
+  // Cleanup, hourly. Each run is bounded (src/env.ts cleanupBatch, cleanupRounds) and logs backlog: true if it stopped early.
+  "triggers": { "crons": ["17 * * * *"] }
+  // No "vars": every setting has a default in the code, so the Deploy to Cloudflare button asks for nothing but
+  // the THREADPACKET_SETUP_CODE secret (a variable listed here, even empty, becomes a required field there).
+  // Optional variables, set under "vars" or in the dashboard, documented in docs/DEPLOY.md:
+  //   PUBLIC_URL                 public origin without a trailing slash; empty = the origin each request came to.
+  //   THREADPACKET_ENV           "dev" honours DEV_TOKENS for local wrangler dev; anything else is production.
+  //   MAX_ATTACHMENT_BYTES       bound on one file, default 26214400 (25 MiB).
+  //   IMPORT_HOST_ALLOWLIST      limit server-side imports of host file URLs (ChatGPT files) to these hosts; empty = any public host.
+  //   THREADPACKET_UPDATE_CHECK  "off" turns off the daily update check (README, "Update check").
+  //   FILE_STORE                 "kv" (default) or "r2": the file store; unset picks R2 if a bucket is bound, else KV.
+}

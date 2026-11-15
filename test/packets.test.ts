@@ -1,0 +1,606 @@
+import { beforeEach, describe, expect, it } from "vitest";
+import { createExecutionContext, env, SELF } from "cloudflare:test";
+import worker from "../src/index";
+import { upsertMember } from "../src/auth/builtin";
+import { numberedName } from "../src/domain/service";
+import { ORIGIN, PDF, PNG, ZIP_HEAD, call, errorText, expectOk, token } from "./helpers";
+
+/** Packets: any member signs in, sees their packets and files in one list, opens a packet to read its brief and see its files, and uploads a file for their assistant. */
+const CODES = { tim: "code-of-tim-1", tom: "code-of-tom-1", amy: "code-of-amy-1" } as const;
+type Who = keyof typeof CODES;
+const COOKIE = "__Host-threadpacket-session";
+
+let ip = 0;
+const form = (path: string, fields: Record<string, string>, extra: Record<string, string> = {}) =>
+  SELF.fetch(`${ORIGIN}${path}`, {
+    method: "POST",
+    redirect: "manual",
+    // Each sign-in from its own address, so the 10-per-10-minutes limit never mixes into these tests.
+    headers: { origin: ORIGIN, "content-type": "application/x-www-form-urlencoded", "cf-connecting-ip": `203.0.113.${++ip % 250}`, ...extra },
+    body: new URLSearchParams(fields),
+  });
+const signIn = (handle: string, code: string, extra: Record<string, string> = {}) => form("/login", { handle, access_code: code, ...extra });
+
+/** The name=value pairs a response sets, by cookie name. */
+const cookiesOf = (res: Response): Record<string, string> =>
+  Object.fromEntries(res.headers.getSetCookie().map((c) => c.split(";")[0]!).map((kv) => [kv.slice(0, kv.indexOf("=")), kv]));
+
+interface Sess {
+  cookie: string;
+  csrf: string;
+}
+async function sessionOf(who: Who): Promise<Sess> {
+  const res = await signIn(who, CODES[who]);
+  expect(res.status).toBe(303);
+  expect(res.headers.get("location")).toBe("/packets");
+  const cookie = cookiesOf(res)[COOKIE]!;
+  const page = await (await SELF.fetch(`${ORIGIN}/packets`, { headers: { cookie } })).text();
+  return { cookie, csrf: /name="csrf" value="([^"]+)"/.exec(page)![1]! };
+}
+/** Where a session's browser lands on Packets: 200 while signed in, the sign-in page once it ended. */
+const packetsStatus = async (s: Sess) => {
+  const res = await SELF.fetch(`${ORIGIN}/packets`, { redirect: "manual", headers: { cookie: s.cookie } });
+  return res.status === 303 ? res.headers.get("location") : res.status;
+};
+
+const pageOf = async (s: Sess, query = "") => (await SELF.fetch(`${ORIGIN}/packets${query}`, { headers: { cookie: s.cookie } })).text();
+
+async function upload(s: Sess, name: string, bytes: Uint8Array, type: string, note?: string, csrf = s.csrf): Promise<Response> {
+  const fd = new FormData();
+  fd.append("csrf", csrf);
+  fd.append("file", new File([bytes], name, { type }));
+  if (note) fd.append("note", note);
+  return SELF.fetch(`${ORIGIN}/packets/upload`, { method: "POST", redirect: "manual", headers: { origin: ORIGIN, cookie: s.cookie }, body: fd });
+}
+async function uploaded(s: Sess, name: string, note?: string): Promise<string> {
+  const res = await upload(s, name, PDF, "application/pdf", note);
+  expect(res.status).toBe(303);
+  return new URL(res.headers.get("location")!, ORIGIN).searchParams.get("uploaded")!;
+}
+
+/** Uploads a file of any accepted type and returns its id. */
+async function uploadedAs(s: Sess, name: string, bytes: Uint8Array, type: string): Promise<string> {
+  const res = await upload(s, name, bytes, type);
+  expect(res.status).toBe(303);
+  return new URL(res.headers.get("location")!, ORIGIN).searchParams.get("uploaded")!;
+}
+const enc = (t: string) => new TextEncoder().encode(t);
+/** The left menu of a signed-in page. */
+const menuOf = (html: string) => /<nav class="side"[\s\S]*?<\/nav>/.exec(html)![0];
+const get = (path: string, s?: Sess) => SELF.fetch(`${ORIGIN}${path}`, { redirect: "manual", headers: s ? { cookie: s.cookie } : {} });
+
+const post = (s: Sess, path: string, fields: Record<string, string>) =>
+  SELF.fetch(`${ORIGIN}${path}`, {
+    method: "POST",
+    redirect: "manual",
+    headers: { origin: ORIGIN, cookie: s.cookie, "content-type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ csrf: s.csrf, ...fields }),
+  });
+
+const sendByName = async (who: Who, names: string[], extra: Record<string, unknown> = {}) =>
+  call(await token(who), "threadpacket_send", { title: "Q3 VAT for the bakery", brief: "Fix the two flagged invoices.", to: "tom", attachment_names: names, idempotency_key: crypto.randomUUID(), ...extra });
+const send = async (who: Who, to: string | undefined, title: string) =>
+  expectOk(await call(await token(who), "threadpacket_send", { title, brief: "Notes.", ...(to ? { to } : {}), idempotency_key: crypto.randomUUID() }));
+
+describe("Packets (/packets)", () => {
+  beforeEach(async () => {
+    // Each test starts with no files or packets, whatever the tests before it left.
+    await env.DB.batch(["DELETE FROM packet_attachments", "DELETE FROM tickets", "DELETE FROM attachments", "DELETE FROM packets"].map((q) => env.DB.prepare(q)));
+    for (const [who, code] of Object.entries(CODES)) await upsertMember(env.DB, who, code);
+    await env.DB.prepare("INSERT OR IGNORE INTO admin_members (handle) VALUES ('tim')").run();
+  });
+
+  it("any member signs in with their username and access code; a wrong code or another site's form is refused", async () => {
+    const page = await SELF.fetch(`${ORIGIN}/packets`, { redirect: "manual" });
+    expect(page.status).toBe(303);
+    expect(page.headers.get("location")).toBe("/login?next=%2Fpackets");
+    const html = await (await SELF.fetch(`${ORIGIN}/login?next=%2Fpackets`)).text();
+    expect(html).toContain('action="/login"');
+    expect(html).toContain("<h1>Sign in to Threadpacket.</h1>");
+    expect(html).not.toContain('name="team"');
+
+    expect((await signIn("tom", "wrong-code")).status).toBe(401);
+    const foreign = await form("/login", { handle: "tom", access_code: CODES.tom }, { origin: "https://evil.example" });
+    expect(foreign.status).toBe(403);
+
+    // tom is not an admin: he gets Packets only.
+    const ok = await signIn("tom", CODES.tom);
+    expect(ok.status).toBe(303);
+    expect(ok.headers.getSetCookie()).toEqual([expect.stringMatching(/^__Host-threadpacket-session=[^;]+; Path=\/; Secure; HttpOnly; SameSite=Strict/)]);
+    const s = await sessionOf("tom");
+    const mine = await pageOf(s);
+    expect(mine).toContain("<strong>tom</strong>");
+    expect(mine).toContain("<h1>Packets</h1>");
+    expect(mine).toContain('enctype="multipart/form-data"');
+    expect(mine).not.toContain('href="/console/');
+    expect(mine).toContain("Nothing here yet.");
+    // The left menu fills the window and stays put while the page scrolls, so the account menu stays bottom-left;
+    // every signed-in page has the same content width and title block.
+    expect(mine).toMatch(/nav\.side\{[^}]*position:sticky;top:0;[^}]*height:100dvh/);
+    expect(mine).toContain(".shell>main>*{width:100%;max-width:1120px}");
+    expect(mine).toMatch(/<header class="app-head">\s*<div><h1>Packets<\/h1>/);
+    // Old /assets routes return 404.
+    expect((await SELF.fetch(`${ORIGIN}/assets`, { redirect: "manual", headers: { cookie: s.cookie } })).status).toBe(404);
+  });
+
+  it("one sign-in opens every page: an admin moves between Packets, the console and Assistant setup with one session", async () => {
+    // tom is not an admin: his session opens Packets and Assistant setup; the console sends him back to Packets.
+    const tom = await sessionOf("tom");
+    const consoleRes = await get("/console/overview", tom);
+    expect(consoleRes.status).toBe(303);
+    expect(consoleRes.headers.get("location")).toBe("/packets");
+    expect(await packetsStatus(tom)).toBe(200);
+
+    // tim is an admin: one cookie, and every page knows him.
+    const tim = await sessionOf("tim");
+    expect(await pageOf(tim)).toContain('<a href="/console/overview">Overview</a>');
+    for (const path of ["/packets", "/console/overview", "/console/members", "/connect"]) {
+      const res = await get(path, tim);
+      expect(res.status, path).toBe(200);
+      expect(menuOf(await res.text()), path).toContain("<strong>tim</strong>");
+    }
+    // Following a sign-in link while signed in goes straight on.
+    const again = await get("/login?next=%2Fconsole%2Fmembers", tim);
+    expect(again.headers.get("location")).toBe("/console/members");
+
+    // A revoked admin grant closes the console, and its pages leave the menu; Packets stays.
+    await env.DB.prepare("DELETE FROM admin_members WHERE handle = 'tim'").run();
+    expect((await get("/console/overview", tim)).headers.get("location")).toBe("/packets");
+    expect(await pageOf(tim)).not.toContain('href="/console/');
+  });
+
+  it("signing out from any page ends the one session; a reset access code ends it too", async () => {
+    const tim = await sessionOf("tim");
+    const out = await post(tim, "/logout", {});
+    expect(out.status).toBe(303);
+    expect(out.headers.get("location")).toBe("/");
+    expect(out.headers.getSetCookie()).toEqual([expect.stringMatching(/^__Host-threadpacket-session=; [^\n]*Max-Age=0/)]);
+    expect(await packetsStatus(tim)).toBe("/login?next=%2Fpackets");
+    expect((await get("/console/overview", tim)).headers.get("location")).toBe("/login?next=%2Fconsole%2Foverview");
+
+    // The console's sign-out is the same one.
+    const again = await sessionOf("tim");
+    const consolePage = await (await get("/console/overview", again)).text();
+    expect(consolePage).toContain('<a href="/packets">Packets</a>');
+    const consoleCsrf = /name="csrf" value="([^"]+)"/.exec(consolePage)![1]!;
+    expect((await post({ ...again, csrf: consoleCsrf }, "/logout", {})).status).toBe(303);
+    expect(await packetsStatus(again)).toBe("/login?next=%2Fpackets");
+
+    const tom = await sessionOf("tom");
+    await upsertMember(env.DB, "tom", "a-new-code-for-tom");
+    expect(await packetsStatus(tom)).toBe("/login?next=%2Fpackets");
+  });
+
+  it("an upload is stored like an assistant's upload, owned by the uploader and shown only to them, with no ids in the text", async () => {
+    const tom = await sessionOf("tom");
+    const id = await uploaded(tom, "vat-q3-summary.pdf", "Signed copy");
+    const row = await env.DB.prepare("SELECT * FROM attachments WHERE id = ?").bind(id).first<Record<string, unknown>>();
+    expect(row).toMatchObject({ owner: "tom", filename: "vat-q3-summary.pdf", state: "ready", mime_type: "application/pdf", source: "upload", size: PDF.byteLength });
+    expect(JSON.parse(String(row!.provenance))).toEqual({ via: "web", note: "Signed copy" });
+
+    const page = await pageOf(tom, `?uploaded=${id}`);
+    expect(page).toContain("Uploaded <strong>vat-q3-summary.pdf</strong>. Tell your assistant: <q>Send a packet with vat-q3-summary.pdf.</q>");
+    expect(page).toContain(">Ready to send</h2>");
+    expect(page).toContain('<span class="sect-note">Private to you until sent</span>');
+    expect(page).toContain("Deleted in 7 days");
+    expect(page).toContain("· uploaded in the browser ");
+    expect(page).toContain('<q>Send a packet with vat-q3-summary.pdf.</q><button type="button" class="btn sm" data-copy="Send a packet with vat-q3-summary.pdf."');
+    expect(page).toContain("Signed copy");
+    // The id is in links and the Remove form, never in the text people read.
+    expect(page.replace(/<[^>]*>/g, "")).not.toContain(id);
+    expect(page).toContain(`href="/packets/file/${id}"`);
+    expect(page).not.toContain("Copy reference");
+
+    // tom's assistant sees it in the inbox; amy's does not, on the page or over MCP.
+    const inbox = expectOk(await call(await token("tom"), "threadpacket_inbox", {}));
+    expect(inbox.unsent_files).toEqual([expect.objectContaining({ attachment_id: id, filename: "vat-q3-summary.pdf", note: "Signed copy" })]);
+    expect(expectOk(await call(await token("amy"), "threadpacket_inbox", {})).unsent_files).toEqual([]);
+    expect(await pageOf(await sessionOf("amy"))).not.toContain("vat-q3-summary.pdf");
+  });
+
+  it("accepts any file, and refuses an upload without the form's CSRF value or with no session", async () => {
+    const tom = await sessionOf("tom");
+    const zip = await upload(tom, "invoices.zip", ZIP_HEAD, "application/zip");
+    expect(zip.status).toBe(303);
+    expect(new URL(zip.headers.get("location")!, ORIGIN).searchParams.get("uploaded")).toBeTruthy();
+    expect((await upload(tom, "vat.pdf", PDF, "application/pdf", undefined, "not-the-csrf")).status).toBe(403);
+    const fd = new FormData();
+    fd.append("file", new File([PDF], "vat.pdf", { type: "application/pdf" }));
+    // With no session the browser goes to sign in, then back to Packets; nothing is stored.
+    const anon = await SELF.fetch(`${ORIGIN}/packets/upload`, { method: "POST", redirect: "manual", headers: { origin: ORIGIN }, body: fd });
+    expect(anon.status).toBe(303);
+    expect(anon.headers.get("location")).toBe("/login?next=%2Fpackets");
+    // Only the ZIP was stored, with Archive label and Download only (no broken Open button).
+    const zipId = new URL(zip.headers.get("location")!, ORIGIN).searchParams.get("uploaded")!;
+    const zipPage = await pageOf(tom, `/file/${zipId}`);
+    expect(zipPage).toContain("Archive, ");
+    expect(zipPage).toContain("Download</a>");
+    expect(zipPage).not.toContain("Open ↗");
+    // HTML and SVG uploads keep their types in metadata but never render inline on /packets/view.
+    const svgId = await uploadedAs(tom, "xss.svg", enc('<svg onload="alert(1)"></svg>'), "image/svg+xml");
+    const svgView = await get(`/packets/view/${svgId}`, tom);
+    expect(svgView.headers.get("content-disposition")).toMatch(/^attachment;/);
+    expect(svgView.headers.get("x-content-type-options")).toBe("nosniff");
+    const ready = await env.DB.prepare("SELECT filename, mime_type FROM attachments WHERE owner = 'tom' AND state = 'ready' ORDER BY filename").all();
+    expect(ready.results).toEqual([
+      { filename: "invoices.zip", mime_type: "application/zip" },
+      { filename: "xss.svg", mime_type: "image/svg+xml" },
+    ]);
+  });
+
+  it("a second upload with the same name gets a number, so an assistant can always attach by name", async () => {
+    const tim = await sessionOf("tim");
+    const first = await uploaded(tim, "lease.pdf");
+    const res = await upload(tim, "LEASE.pdf", PDF, "application/pdf");
+    const location = new URL(res.headers.get("location")!, ORIGIN);
+    expect(location.searchParams.get("renamed")).toBe("1");
+    const second = location.searchParams.get("uploaded")!;
+    expect((await env.DB.prepare("SELECT filename FROM attachments WHERE id = ?").bind(second).first<{ filename: string }>())?.filename).toBe("LEASE (2).pdf");
+    expect(await pageOf(tim, location.search)).toContain("Uploaded as <strong>LEASE (2).pdf</strong>, because you already had a file with that name.");
+    const third = await uploaded(tim, "lease.pdf");
+    expect((await env.DB.prepare("SELECT filename FROM attachments WHERE id = ?").bind(third).first<{ filename: string }>())?.filename).toBe("lease (3).pdf");
+
+    // Each name now matches one file.
+    const sent = expectOk(await sendByName("tim", ["lease.pdf", "lease (2).pdf"]));
+    expect((sent.attachments as Array<{ attachment_id: string }>).map((a) => a.attachment_id)).toEqual([first, second]);
+    // Once the first is sent, its name is free again.
+    expect(await uploaded(tim, "lease.pdf")).not.toBe(first);
+
+    expect(numberedName("notes", 2)).toBe("notes (2)");
+    expect(numberedName(".env", 2)).toBe(".env (2)");
+    expect(numberedName(`${"a".repeat(260)}.pdf`, 12)).toHaveLength(255);
+  });
+
+  it("threadpacket_send attaches an unsent file by name, from the caller's own files only, and never guesses", async () => {
+    const tim = await sessionOf("tim");
+    const amy = await sessionOf("amy");
+    // amy has a file with the same name: tim's send must never pick it up.
+    await uploaded(amy, "vat-q3-summary.pdf");
+
+    const none = await sendByName("tim", ["vat-q3-summary.pdf"]);
+    expect(errorText(none)).toContain("not_found: attachment_names: none of your unsent files is named");
+    expect(errorText(none)).toContain(`${ORIGIN}/packets`);
+
+    const first = await uploaded(tim, "vat-q3-summary.pdf");
+    const sent = expectOk(await sendByName("tim", ["VAT-Q3-Summary.pdf"]));
+    expect((sent.attachments as Array<{ attachment_id: string }>).map((a) => a.attachment_id)).toEqual([first]);
+
+    // Two unsent files with the same name (an assistant's upload is not numbered): nothing is sent, and both are listed.
+    const a = await uploaded(tim, "flagged-invoices.pdf", "first draft");
+    const b = await uploaded(tim, "flagged-invoices.pdf", "final");
+    await env.DB.prepare("UPDATE attachments SET filename = 'flagged-invoices.pdf' WHERE id = ?").bind(b).run();
+    const before = await env.DB.prepare("SELECT COUNT(*) AS n FROM packets").first<{ n: number }>();
+    const two = errorText(await sendByName("tim", ["flagged-invoices.pdf"]));
+    expect(two).toContain("ambiguous: attachment_names:");
+    expect(two).toContain(a);
+    expect(two).toContain(b);
+    expect(two).toContain('note: "final"');
+    expect((await env.DB.prepare("SELECT COUNT(*) AS n FROM packets").first<{ n: number }>())?.n).toBe(before?.n);
+    // The id settles it.
+    expectOk(await call(await token("tim"), "threadpacket_send", { title: "Invoices", brief: "The final one.", to: "tom", attachment_ids: [b], idempotency_key: crypto.randomUUID() }));
+  });
+
+  it("the uploader's assistant opens an unsent file without sending it; nobody else can, and a sent file is read through its packet", async () => {
+    const tim = await sessionOf("tim");
+    const notes = await uploadedAs(tim, "notes.md", enc("# Renewal\nCall the insurer on Monday."), "text/markdown");
+    const scan = await uploadedAs(tim, "scan.png", PNG, "image/png");
+    const letter = await uploaded(tim, "letter.pdf", "Renew by 1 December.");
+    const bearer = await token("tim");
+
+    // The inbox says how to open them.
+    const inbox = await call(bearer, "threadpacket_inbox", {});
+    expect(inbox.content.map((c) => c.text ?? "").join("\n")).toContain("open with threadpacket_read and the attachment_id alone");
+
+    // Text inline, an image as an image, anything else as a download link that serves the original bytes.
+    const text = await call(bearer, "threadpacket_read", { attachment_id: notes });
+    expect(expectOk(text)).toMatchObject({ representation: "text", text: "# Renewal\nCall the insurer on Monday.", unsent_file: { note: null } });
+    expect(text.content[0]!.text).toContain("your unsent file, uploaded");
+    const image = await call(bearer, "threadpacket_read", { attachment_id: scan });
+    expect(expectOk(image).representation).toBe("image");
+    expect(image.content.some((c) => (c as { type: string }).type === "image")).toBe(true);
+    const pdf = expectOk(await call(bearer, "threadpacket_read", { attachment_id: letter }));
+    expect(pdf).toMatchObject({ representation: "original", unsent_file: { note: "Renew by 1 December." } });
+    expect(pdf.packet_id).toBeUndefined();
+    const url = pdf.download_url as string;
+    const dl = await SELF.fetch(url);
+    expect(dl.status).toBe(200);
+    expect(new Uint8Array(await dl.arrayBuffer())).toEqual(PDF);
+    // Opening it records nothing as picked up and leaves it unsent.
+    expect((await env.DB.prepare("SELECT COUNT(*) AS n FROM packet_attachments WHERE attachment_id = ?").bind(letter).first<{ n: number }>())?.n).toBe(0);
+
+    // Nobody else opens it, not even with its id: a teammate's assistant gets not_found.
+    expect(errorText(await call(await token("tom"), "threadpacket_read", { attachment_id: letter }))).toContain("not_found");
+    expect(errorText(await call(bearer, "threadpacket_read", {}))).toContain("invalid_input");
+
+    // Once sent, it is a packet's file: read through that packet, and closed by revoking it.
+    const sent = expectOk(await call(bearer, "threadpacket_send", { title: "Renewal", brief: "Renew it.", to: "tom", attachment_ids: [letter], idempotency_key: crypto.randomUUID() }));
+    expect(errorText(await call(bearer, "threadpacket_read", { attachment_id: letter }))).toContain("is not one of your unsent files");
+    expect((await SELF.fetch(url)).status).toBe(200);
+    expectOk(await call(bearer, "threadpacket_revoke", { packet_id: sent.packet_id }));
+    expect((await SELF.fetch(url)).status).toBe(410);
+
+    // The file page offers both sentences.
+    const page = await pageOf(tim, `/file/${notes}`);
+    expect(page).toContain("Send a packet with notes.md.");
+    expect(page).toContain("Read notes.md from Threadpacket.");
+  });
+
+  it("a retried send by name returns the packet it already sent, though the file is no longer unsent", async () => {
+    const tim = await sessionOf("tim");
+    const id = await uploaded(tim, "lease.pdf");
+    const key = crypto.randomUUID();
+    const first = expectOk(await sendByName("tim", ["lease.pdf"], { idempotency_key: key }));
+    const again = expectOk(await sendByName("tim", ["lease.pdf"], { idempotency_key: key }));
+    expect(again.replayed).toBe(true);
+    expect(again.packet_id).toBe(first.packet_id);
+    expect((again.attachments as Array<{ attachment_id: string }>)[0]?.attachment_id).toBe(id);
+  });
+
+  it("lists packets with who sent them to whom, each opening to its page, and a sent file stays findable under its packet", async () => {
+    const tim = await sessionOf("tim");
+    const tom = await sessionOf("tom");
+    await uploaded(tim, "vat-q3-summary.pdf");
+    expectOk(await sendByName("tim", ["vat-q3-summary.pdf"]));
+    await send("tim", "team", "Store opening checklist");
+    await send("tim", undefined, "Notes for my laptop");
+    // Distinct send times, an hour apart, so the order is known.
+    const hoursAgo = (h: number) => new Date(Date.now() - h * 3_600_000).toISOString();
+    for (const [title, h] of [["Q3 VAT for the bakery", 3], ["Store opening checklist", 2], ["Notes for my laptop", 1]] as const) {
+      await env.DB.prepare("UPDATE packets SET created_at = ? WHERE title = ?").bind(hoursAgo(h), title).run();
+    }
+
+    const mine = await pageOf(tim);
+    expect(mine).toContain("To tom · 1 file");
+    expect(mine).toContain("To the team · Brief only");
+    expect(mine).toContain("To yourself · Brief only");
+    expect(mine).toMatch(/class="file-chip" href="\/packets\/pk_[^"#]+#f-[^"]+"[^>]*>.*vat-q3-summary\.pdf<\/a>/);
+    expect(mine).toMatch(/<a class="entry-name" href="\/packets\/pk_[^"]+">Store opening checklist<\/a>/);
+    expect(mine).not.toContain("Ready to send");
+    // The list shows an expiry only when it is close.
+    expect(mine).not.toContain("Expires in");
+    await env.DB.prepare("UPDATE packets SET expires_at = ? WHERE title = ?").bind(new Date(Date.now() + 5 * 3_600_000 + 60_000).toISOString(), "Notes for my laptop").run();
+    expect(await pageOf(tim)).toContain(">Expires in 5 hours</span>");
+    // One list, newest first: a file uploaded now comes before the packets.
+    await uploaded(tim, "draft.md");
+    const now = await pageOf(tim);
+    const at = ["draft.md", "Notes for my laptop", "Store opening checklist", "Q3 VAT for the bakery"].map((t) => now.indexOf(t));
+    expect(at.every((i) => i > 0)).toBe(true);
+    expect([...at].sort((x, y) => x - y)).toEqual(at);
+
+    // tom has not opened either packet from tim yet: both are new for him.
+    const theirs = await pageOf(tom);
+    expect(theirs).toContain(">New for you</h2>");
+    // They are ordinary rows, marked unread, with the sentence to tell the assistant.
+    expect(theirs.match(/<article class="entry unread">/g)?.length).toBe(2);
+    expect(theirs).toContain(">From tim · ");
+    expect(theirs).toContain(">From tim, to the team · ");
+    expect(theirs).toContain('<span class="st new"><span class="dot new"></span>New</span>');
+    expect(theirs).toContain("<q>Continue the packet from tim.</q>");
+    expect(theirs).not.toContain("Notes for my laptop");
+    // Filters: Sent has nothing of tom's; Received has tim's two.
+    expect(await pageOf(tom, "?show=sent")).toContain("You have not sent a packet yet.");
+    expect(await pageOf(tom, "?show=sent")).not.toContain("New for you");
+    const received = await pageOf(tom, "?show=received");
+    expect(received).toContain('<a href="/packets?show=received" aria-current="page">Received</a>');
+    expect(received).toContain("Q3 VAT for the bakery");
+    expect(await pageOf(tim, "?show=received")).not.toContain("Store opening checklist");
+    expect(await pageOf(tim, "?show=sent")).toContain("Store opening checklist");
+  });
+
+  it("shows older packets a page at a time, so none are hidden", async () => {
+    const tom = await sessionOf("tom");
+    for (let i = 1; i <= 21; i++) await send("tim", "tom", `Packet ${String(i).padStart(2, "0")}`);
+    const titles = (html: string) => [...html.matchAll(/class="entry-name"[^>]*>(Packet \d\d)<\/a>/g)].map((m) => m[1]!);
+    const first = await pageOf(tom);
+    expect(titles(first)).toHaveLength(20);
+    const older = /href="\/packets\?older=([^"]+)">Show older packets<\/a>/.exec(first)![1]!;
+    const second = await pageOf(tom, `?older=${older}`);
+    expect(second).toContain("<h1>Older packets</h1>");
+    expect(titles(second)).toHaveLength(1);
+    expect(new Set([...titles(first), ...titles(second)]).size).toBe(21);
+    expect(second).toContain('href="/packets">Back to the newest</a>');
+    expect(second).not.toContain("Show older packets");
+
+    const bad = await SELF.fetch(`${ORIGIN}/packets?older=not-a-cursor`, { redirect: "manual", headers: { cookie: tom.cookie } });
+    expect(bad.status).toBe(303);
+    expect(bad.headers.get("location")).toBe("/packets");
+  });
+
+  it("a member downloads the files of their live packets; other members and revoked packets are refused", async () => {
+    const tim = await sessionOf("tim");
+    const id = await uploaded(tim, "vat-q3-summary.pdf");
+    const sent = expectOk(await sendByName("tim", ["vat-q3-summary.pdf"]));
+    const path = `/packets/download/${sent.packet_id}/${id}`;
+
+    const tom = await sessionOf("tom");
+    expect(await pageOf(tom)).toContain("Q3 VAT for the bakery");
+    const page = await pageOf(tom, `/${sent.packet_id}`);
+    expect(page).toContain(`href="${path}"`);
+    const dl = await SELF.fetch(`${ORIGIN}${path}`, { headers: { cookie: tom.cookie } });
+    expect(dl.status).toBe(200);
+    expect(dl.headers.get("content-disposition")).toContain("vat-q3-summary.pdf");
+    expect(new Uint8Array(await dl.arrayBuffer())).toEqual(PDF);
+
+    expect((await SELF.fetch(`${ORIGIN}${path}`, { headers: { cookie: (await sessionOf("amy")).cookie } })).status).toBe(404);
+    expect((await SELF.fetch(`${ORIGIN}${path}`, { redirect: "manual" })).status).toBe(303);
+    expectOk(await call(await token("tim"), "threadpacket_revoke", { packet_id: sent.packet_id }));
+    expect((await SELF.fetch(`${ORIGIN}${path}`, { headers: { cookie: tom.cookie } })).status).toBe(410);
+  });
+
+  it("a member removes their own unsent file, but not a sent file or a teammate's", async () => {
+    const tim = await sessionOf("tim");
+    const tom = await sessionOf("tom");
+    const mine = await uploaded(tom, "draft.pdf");
+    const theirs = await uploaded(tim, "draft.pdf");
+    expect((await post(tom, "/packets/remove", { id: theirs })).status).toBe(404);
+    const removed = await post(tom, "/packets/remove", { id: mine });
+    expect(removed.status).toBe(303);
+    expect(removed.headers.get("location")).toBe("/packets?removed=1");
+    expect(await env.DB.prepare("SELECT id FROM attachments WHERE id = ?").bind(mine).first()).toBeNull();
+
+    const sent = await uploaded(tim, "sent.pdf");
+    expectOk(await sendByName("tim", ["sent.pdf"]));
+    const late = await post(tim, "/packets/remove", { id: sent });
+    expect(late.status).toBe(410);
+    expect(await late.text()).toContain("That file is in a packet now, or was already removed.");
+    expect(await env.DB.prepare("SELECT id FROM attachments WHERE id = ?").bind(sent).first()).not.toBeNull();
+  });
+
+  it("every signed-in page has the same left menu: Packets first, then Assistant setup, then an admin's console pages", async () => {
+    const tom = await sessionOf("tom");
+    const m = menuOf(await pageOf(tom));
+    expect(m).toContain('<a href="/packets" class="on" aria-current="page">Packets</a>');
+    expect(m).toContain('<a href="/connect">Assistant setup</a>');
+    expect(m.indexOf(">Packets</a>")).toBeLessThan(m.indexOf(">Assistant setup</a>"));
+    expect(m).not.toContain('href="/console/');
+    expect(m).toContain('action="/logout"');
+
+    const tim = await sessionOf("tim");
+    const t = menuOf(await pageOf(tim));
+    expect(t).toContain('<a href="/connect">Assistant setup</a>');
+    for (const [path, label] of [["overview", "Overview"], ["members", "Members"], ["assistants", "Assistants"], ["ops", "Ops"]]) {
+      expect(t).toContain(`<a href="/console/${path}">${label}</a>`);
+    }
+    expect(t).toContain('<span class="chip">admin</span>');
+    // The console has the same menu, with Packets first and the same sign-out.
+    const c = menuOf(await (await get("/console/members", tim)).text());
+    expect(c).toContain('<a href="/packets">Packets</a>');
+    expect(c).toContain('<a href="/console/members" class="on" aria-current="page">Members</a>');
+    expect(c.indexOf(">Packets</a>")).toBeLessThan(c.indexOf(">Members</a>"));
+    expect(c).toContain('action="/logout"');
+    // Every packet and file page keeps the menu: no page is a dead end.
+    const id = await uploaded(tom, "lease.pdf");
+    expect(menuOf(await pageOf(tom, `/file/${id}`))).toContain('class="on" aria-current="page">Packets</a>');
+  });
+
+  it("a packet opens to its brief and its files, shown in the page, and a brief's HTML stays text", async () => {
+    const tim = await sessionOf("tim");
+    const pdf = await uploaded(tim, "lease.pdf");
+    const png = await uploadedAs(tim, "floor-plan.png", PNG, "image/png");
+    const txt = await uploadedAs(tim, "notes.txt", enc("Line one\n<b>not bold</b>"), "text/plain");
+    const md = await uploadedAs(tim, "checklist.md", enc("# Steps\n- **Sign** the lease"), "text/markdown");
+    const brief = "## Purpose\nSign the **lease** by Friday.\n\n- Read [the terms](https://example.com/terms)\n- Not [this one](http://plain.example)\n\n<script>alert(1)</script>";
+    const sent = expectOk(await sendByName("tim", ["lease.pdf", "floor-plan.png", "notes.txt", "checklist.md"], { brief }));
+    const path = `/packets/${sent.packet_id}`;
+
+    const tom = await sessionOf("tom");
+    const res = await get(path, tom);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-security-policy")).toContain("frame-src 'self'");
+    const html = await res.text();
+    expect(html).toContain("<h1>Q3 VAT for the bakery</h1>");
+    expect(html).toContain("<strong>From tim</strong>");
+    expect(html).toContain("4 files");
+    // The brief's own headings sit under the page's.
+    expect(html).toContain("<h4>Purpose</h4>");
+    expect(html).toContain("Sign the <strong>lease</strong> by Friday.");
+    expect(html).toContain('<a href="https://example.com/terms" target="_blank" rel="noopener noreferrer nofollow">the terms</a>');
+    expect(html).not.toContain('href="http://plain.example"');
+    expect(html).toContain("&lt;script&gt;alert(1)&lt;/script&gt;");
+    expect(html).not.toContain("<script>alert(1)");
+    // The packet_id is in links, never in visible text.
+    expect(html.replace(/<[^>]*>/g, "")).not.toContain(String(sent.packet_id));
+    const at = (id: string) => `${sent.packet_id}/${id}`;
+    expect(html).toContain(`<iframe src="/packets/view/${at(pdf)}/lease.pdf" title="lease.pdf"`);
+    // Phones show no PDF inside a page: the same file opens in the phone's own viewer.
+    expect(html).toContain(`<a class="pdf-tap" href="/packets/view/${at(pdf)}/lease.pdf" target="_blank" rel="noopener">`);
+    expect(html).toContain(`<img src="/packets/view/${at(png)}/floor-plan.png" alt="floor-plan.png"`);
+    expect(html).toContain('<pre class="text">Line one\n&lt;b&gt;not bold&lt;/b&gt;</pre>');
+    expect(html).toContain("<h3>Steps</h3>");
+    expect(html).toContain("<li><strong>Sign</strong> the lease</li>");
+    for (const id of [pdf, png, txt, md]) {
+      expect(html).toContain(`id="f-${id}"`);
+      expect(html).toContain(`href="/packets/download/${at(id)}" download`);
+    }
+    expect(html).toContain("Continue in your assistant:</span><q>Continue the packet from tim.</q>");
+    expect(await pageOf(tim, `/${sent.packet_id}`)).toContain("tom picks it up with:</span><q>Continue the packet from tim.</q>");
+
+    // Another member and no session are refused; a revoked packet is gone.
+    expect((await get(path, await sessionOf("amy"))).status).toBe(404);
+    expect((await get(path)).status).toBe(303);
+    expectOk(await call(await token("tim"), "threadpacket_revoke", { packet_id: sent.packet_id }));
+    const gone = await get(path, tom);
+    expect(gone.status).toBe(410);
+    expect(await gone.text()).not.toContain("Sign the");
+  });
+
+  it("a file shows in the page as its checked type: a PDF in the browser's viewer, the rest sandboxed, and only this site may frame it", async () => {
+    const tim = await sessionOf("tim");
+    const pdf = await uploaded(tim, "lease.pdf");
+    const png = await uploadedAs(tim, "floor-plan.png", PNG, "image/png");
+    const txt = await uploadedAs(tim, "notes.txt", enc("<html><script>alert(1)</script>"), "text/plain");
+    const sent = expectOk(await sendByName("tim", ["lease.pdf", "floor-plan.png", "notes.txt"]));
+    const tom = await sessionOf("tom");
+    const view = (id: string, s: Sess = tom) => get(`/packets/view/${sent.packet_id}/${id}`, s);
+
+    const p = await view(pdf);
+    expect(p.status).toBe(200);
+    expect(p.headers.get("content-type")).toBe("application/pdf");
+    expect(p.headers.get("content-disposition")).toBe("inline; filename*=UTF-8''lease.pdf");
+    // Browsers refuse to show a sandboxed PDF, so a PDF gets only the framing rule.
+    expect(p.headers.get("content-security-policy")).toBe("frame-ancestors 'self'");
+    expect(p.headers.get("x-frame-options")).toBe("SAMEORIGIN");
+    expect(p.headers.get("cache-control")).toBe("private, no-store");
+    expect(new Uint8Array(await p.arrayBuffer())).toEqual(PDF);
+
+    const i = await view(png);
+    expect(i.headers.get("content-type")).toBe("image/png");
+    expect(i.headers.get("content-security-policy")).toContain("sandbox");
+
+    // Text is always plain text, never a page.
+    const t = await view(txt);
+    expect(t.headers.get("content-type")).toBe("text/plain; charset=utf-8");
+    expect(t.headers.get("content-security-policy")).toContain("sandbox");
+    expect(t.headers.get("x-content-type-options")).toBe("nosniff");
+    expect(await t.text()).toBe("<html><script>alert(1)</script>");
+
+    // Download stays an attachment.
+    expect((await get(`/packets/download/${sent.packet_id}/${txt}`, tom)).headers.get("content-disposition")).toMatch(/^attachment;/);
+    expect((await view(pdf, await sessionOf("amy"))).status).toBe(404);
+    expect((await get(`/packets/view/${sent.packet_id}/${pdf}`)).status).toBe(303);
+  });
+
+  it("an uploaded file opens for its uploader only, until it is sent; then it is under its packet", async () => {
+    const tom = await sessionOf("tom");
+    const id = await uploaded(tom, "lease.pdf", "Signed copy");
+    const page = await pageOf(tom, `/file/${id}`);
+    expect(page).toContain("<h1>lease.pdf</h1>");
+    expect(page).toContain("Signed copy");
+    expect(page).toContain(`<iframe src="/packets/view/${id}/lease.pdf" title="lease.pdf"`);
+    expect(page).toContain('<span class="muted">To send it, tell your assistant</span><q>Send a packet with lease.pdf.</q>');
+    expect(page).toContain('action="/packets/remove"');
+    const v = await get(`/packets/view/${id}`, tom);
+    expect(v.status).toBe(200);
+    expect(v.headers.get("content-disposition")).toBe("inline; filename*=UTF-8''lease.pdf");
+    expect((await get(`/packets/download/${id}`, tom)).headers.get("content-disposition")).toMatch(/^attachment;/);
+
+    const amy = await sessionOf("amy");
+    for (const path of [`/packets/file/${id}`, `/packets/view/${id}`, `/packets/download/${id}`]) expect((await get(path, amy)).status).toBe(404);
+
+    expectOk(await call(await token("tom"), "threadpacket_send", { title: "Lease", brief: "Sign it.", to: "tim", attachment_names: ["lease.pdf"], idempotency_key: crypto.randomUUID() }));
+    for (const path of [`/packets/file/${id}`, `/packets/view/${id}`]) expect((await get(path, tom)).status).toBe(404);
+  });
+
+  it("a long text file shows its beginning, with Download for the rest", async () => {
+    const tom = await sessionOf("tom");
+    const id = await uploadedAs(tom, "server.log", enc("line\n".repeat(60_000)), "text/plain");
+    const page = await pageOf(tom, `/file/${id}`);
+    expect(page).toContain("Shows the beginning of the file. Download it for the rest.");
+    // 256 KB of five-byte lines: 52,428 of the 60,000.
+    expect(page.match(/line\n/g)).toHaveLength(52_428);
+    const short = await uploadedAs(tom, "short.txt", enc("just this"), "text/plain");
+    expect(await pageOf(tom, `/file/${short}`)).not.toContain("Shows the beginning");
+  });
+
+  it("the Connect page links to Packets", async () => {
+    expect(await (await SELF.fetch(`${ORIGIN}/connect`)).text()).toContain('Upload it in <a href="/packets">Packets</a>');
+  });
+
+  it("on the control center the sign-in asks for no team either, and leads a new person to create one", async () => {
+    const res = await worker.fetch(new Request(`${ORIGIN}/login`), { ...env, THREADPACKET_MODE: "control" }, createExecutionContext());
+    const html = await res.text();
+    expect(html).not.toContain('name="team"');
+    expect(html).toContain('New to Threadpacket? <a href="/join">Create a team</a>.');
+    expect(html).not.toContain("—");
+  });
+});

@@ -1,0 +1,11 @@
+node_modules/
+.wrangler/
+.dev.vars
+dist/
+*.log
+.DS_Store
+public/
+.quorum/
+docs/growth/
+# Local deployment configs (wrangler.local.jsonc from `npm run setup`, wrangler.hosted.jsonc); wrangler.jsonc stays generic.
+wrangler.*.jsonc
