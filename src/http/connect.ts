@@ -66,7 +66,7 @@ export function hosts(url: string, control = false): Host[] {
       steps: [
         { text: "Add the server with OAuth:", command: `hermes mcp add threadpacket --url ${url} --auth oauth` },
         {
-          text: "In your profile's `config.yaml`, add `trust: untrusted` to the `threadpacket` entry under `mcp_servers`, so Hermes asks you before each Threadpacket tool call. If you installed the Threadpacket plugin, this entry replaces the plugin's own, so keep the setting here.",
+          text: "In your profile's `config.yaml`, add `trust: untrusted` to the `threadpacket` entry under `mcp_servers`, so Hermes asks you before each Threadpacket tool call that sends, revokes, invites or uploads. If you installed the Threadpacket plugin, this entry replaces the plugin's own, so keep the setting here.",
         },
         { text: "Sign in and approve access:", command: "hermes mcp login threadpacket" },
         { text: "Start a new chat or run `/reload-mcp`." },

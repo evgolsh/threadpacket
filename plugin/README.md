@@ -36,7 +36,7 @@ mcp_servers:
 
 Then run `hermes mcp login threadpacket`, sign in with your username and access code, approve access, and start a new session.
 
-A `config.yaml` entry with the same name replaces the package's own server entry, including its `trust: untrusted` setting, so keep `trust: untrusted` in the entry above. If you add the server with `hermes mcp add threadpacket --url https://threadpacket.com/mcp --auth oauth` instead, add `trust: untrusted` to the entry that command creates. With it, Hermes asks you before each Threadpacket tool call, because the tools send files to other people, revoke packets and invite members, and refuses them in unattended runs such as cron.
+A `config.yaml` entry with the same name replaces the package's own server entry, including its `trust: untrusted` setting, so keep `trust: untrusted` in the entry above. If you add the server with `hermes mcp add threadpacket --url https://threadpacket.com/mcp --auth oauth` instead, add `trust: untrusted` to the entry that command creates. With it, Hermes asks you before each Threadpacket tool call that sends, revokes, invites or uploads, because these tools send files to other people, revoke packets and invite members, and refuses those calls in unattended runs such as cron. Reading your inbox and packets does not ask.
 
 ## What you need
 
