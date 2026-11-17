@@ -4,129 +4,25 @@ import { verifyBearer } from "../src/auth/verify";
 import { redactSecrets } from "../src/app";
 import { configFrom } from "../src/env";
 import { ThreadpacketService } from "../src/domain/service";
-import { uploadCommands } from "../src/mcp/commands";
 import { D1Repository } from "../src/store/d1";
 import { R2BlobStore } from "../src/store/blobs";
 import { SignJWT, importJWK } from "jose";
 import privateJwk from "./fixtures/test-private-jwk.json";
 import { AUDIENCE, ISSUER, ORIGIN, PDF, alice, call, errorText, expectOk, rpc, send, sha256Hex } from "./helpers";
 
-/** Splits a POSIX sh command into words. Throws on any character outside quotes that a shell would treat specially. */
-function shWords(cmd: string): string[] {
-  const words: string[] = [];
-  let cur = "";
-  let inWord = false;
-  for (let i = 0; i < cmd.length; ) {
-    const ch = cmd[i]!;
-    if (ch === "'") {
-      const end = cmd.indexOf("'", i + 1);
-      if (end < 0) throw new Error("unterminated quote");
-      cur += cmd.slice(i + 1, end);
-      inWord = true;
-      i = end + 1;
-    } else if (ch === "\\" && cmd[i + 1] === "'") {
-      cur += "'";
-      inWord = true;
-      i += 2;
-    } else if (ch === " ") {
-      if (inWord) words.push(cur);
-      cur = "";
-      inWord = false;
-      i++;
-    } else if (/[A-Za-z0-9_./:@%+=,-]/.test(ch)) {
-      cur += ch;
-      inWord = true;
-      i++;
-    } else {
-      throw new Error(`unquoted special character ${JSON.stringify(ch)}`);
-    }
-  }
-  if (inWord) words.push(cur);
-  return words;
-}
-
-const PS_QUOTES = "'‘’‚‛";
-
-/** Replaces each PowerShell single-quoted literal with L and returns the skeleton plus the literal values. */
-function psLiterals(cmd: string): { skeleton: string; literals: string[] } {
-  let skeleton = "";
-  const literals: string[] = [];
-  for (let i = 0; i < cmd.length; ) {
-    if (!PS_QUOTES.includes(cmd[i]!)) {
-      skeleton += cmd[i++];
-      continue;
-    }
-    let lit = "";
-    i++;
-    for (;;) {
-      if (i >= cmd.length) throw new Error("unterminated literal");
-      const ch = cmd[i]!;
-      if (PS_QUOTES.includes(ch)) {
-        if (i + 1 < cmd.length && PS_QUOTES.includes(cmd[i + 1]!)) {
-          lit += cmd[i + 1];
-          i += 2;
-          continue;
-        }
-        i++;
-        break;
-      }
-      lit += ch;
-      i++;
-    }
-    literals.push(lit);
-    skeleton += "L";
-  }
-  return { skeleton, literals };
-}
-
-const PS_SKELETON =
-  "$ProgressPreference = L; $f = (Resolve-Path -LiteralPath L).ProviderPath; Invoke-RestMethod -Method Put -Uri L -ContentType L -InFile $f";
-
-describe("upload commands never execute a file name or type", () => {
-  const url = "https://threadpacket.test/v1/uploads/at_x?ticket=AbC-_1";
-  const names = [
-    "proof$(printf FILENAME_EXPANDED).txt",
-    "back`printf X`tick.pdf",
-    `it's "quoted".pdf`,
-    "spaces in name.pdf",
-    "-rf.pdf",
-    "-",
-    "semi;colon&amp|pipe>out.pdf",
-    "‘smart’ quotes‚‛.pdf",
-    "$HOME ${PATH} %USERPROFILE%.pdf",
-    "[wild]*?.pdf",
-    "tab\tand\\back.pdf",
-    "x'",
-  ];
-
-  it.each(names)("POSIX command keeps %j as one literal argument", (name) => {
-    const { curl } = uploadCommands(name, url, "application/pdf");
-    expect(shWords(curl)).toEqual(["curl", "-fsS", "-X", "PUT", "--data-binary", `@./${name}`, "-H", "content-type: application/pdf", url]);
-  });
-
-  it.each(names)("PowerShell command keeps %j inside literals", (name) => {
-    const { powershell } = uploadCommands(name, url, "application/pdf");
-    const { skeleton, literals } = psLiterals(powershell);
-    expect(skeleton).toBe(PS_SKELETON);
-    expect(literals).toEqual(["SilentlyContinue", `.\\${name}`, url, "application/pdf"]);
-  });
-
-  it("the tool reduces the name to a base name, quotes it, and never puts an unsafe type in the command", async () => {
+describe("the upload tool returns data, never a command", () => {
+  it("returns the URL on this server and the headers, with no shell command and an unsafe type replaced", async () => {
     const a = await alice();
     const r = expectOk(await call(a, "threadpacket_upload_url", { filename: "../dir/proof$(printf X)\n.pdf", mime_type: "application/pdf" }));
+    expect(Object.keys(r).sort()).toEqual(["attachment_id", "expires_at", "headers", "max_bytes", "method", "upload_url"]);
     expect(r.method).toBe("PUT");
     expect(r.headers).toEqual({ "content-type": "application/pdf" });
-    const words = shWords(String(r.curl));
-    expect(words[5]).toBe("@./proof$(printf X).pdf");
-    expect(words[8]).toBe(r.upload_url);
-    expect(psLiterals(String(r.powershell)).skeleton).toBe(PS_SKELETON);
+    expect(String(r.upload_url).startsWith(`${ORIGIN}/v1/uploads/${r.attachment_id}?ticket=`)).toBe(true);
 
     // Any type is accepted; one that is not a plain type/subtype becomes application/octet-stream.
     for (const bad of ["text/plain$(printf MIME_EXPANDED)", 'text/plain"; printf TYPE_ESCAPED; #']) {
       const res = expectOk(await call(a, "threadpacket_upload_url", { filename: "proof.txt", mime_type: bad }));
       expect(res.headers).toEqual({ "content-type": "application/octet-stream" });
-      expect(String(res.curl)).not.toContain("printf");
-      expect(String(res.powershell)).not.toContain("printf");
     }
     const docx = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
     expect(expectOk(await call(a, "threadpacket_upload_url", { filename: "r.docx", mime_type: docx })).headers).toEqual({ "content-type": docx });
@@ -134,10 +30,25 @@ describe("upload commands never execute a file name or type", () => {
     expect(canon.headers).toEqual({ "content-type": "text/markdown" });
   });
 
-  it("without a declared type the command sends application/octet-stream and the upload succeeds", async () => {
+  it("the tool text and description give the fixed upload form, not a command built for this file", async () => {
+    const a = await alice();
+    const { body } = await rpc(a, "tools/call", { name: "threadpacket_upload_url", arguments: { filename: "it's.pdf", mime_type: "application/pdf" } });
+    const shown = String(body.result.content[0].text);
+    expect(shown).not.toContain("curl");
+    expect(shown).not.toContain("Invoke-");
+    expect(shown).toContain("content-type: application/pdf");
+    const list = await rpc(a, "tools/list");
+    const tool = list.body.result.tools.find((t: any) => t.name === "threadpacket_upload_url");
+    expect(tool.description).toContain(`check that upload_url starts with ${ORIGIN}/v1/uploads/`);
+    expect(tool.description).toContain("curl -fsS -X PUT --upload-file '<full path>' -H 'content-type: <type>' '<upload_url>'");
+    expect(tool.description).toContain("Invoke-WebRequest -UseBasicParsing -Method Put -InFile '<full path>' -ContentType '<type>' -Uri '<upload_url>'");
+    expect(tool.description).not.toContain("run the returned");
+  });
+
+  it("without a declared type the headers say application/octet-stream and the upload succeeds", async () => {
     const a = await alice();
     const r = expectOk(await call(a, "threadpacket_upload_url", { filename: "codeword.pdf" }));
-    expect(shWords(String(r.curl))[7]).toBe("content-type: application/octet-stream");
+    expect(r.headers).toEqual({ "content-type": "application/octet-stream" });
     const put = await SELF.fetch(String(r.upload_url), { method: "PUT", headers: { "content-type": "application/octet-stream" }, body: PDF });
     expect(put.status).toBe(200);
     expect(((await put.json()) as { mime_type: string }).mime_type).toBe("application/pdf");

@@ -22,7 +22,21 @@ codex plugin add threadpacket@threadpacket
 codex mcp login threadpacket
 ```
 
-For Claude, ChatGPT and Hermes, follow [Assistant setup](https://threadpacket.com/connect).
+For Claude and ChatGPT, follow [Assistant setup](https://threadpacket.com/connect).
+
+Hermes: install Threadpacket from the plugin catalog, then sign in once. Agent Plugins packages cannot ask Hermes for OAuth, so the sign-in uses a normal Hermes server entry with the same name. Add this to your profile's `config.yaml` (replace any existing `threadpacket` entry as a whole):
+
+```yaml
+mcp_servers:
+  threadpacket:
+    url: "https://threadpacket.com/mcp"
+    auth: oauth
+    trust: untrusted
+```
+
+Then run `hermes mcp login threadpacket`, sign in with your username and access code, approve access, and start a new session.
+
+A `config.yaml` entry with the same name replaces the package's own server entry, including its `trust: untrusted` setting, so keep `trust: untrusted` in the entry above. If you add the server with `hermes mcp add threadpacket --url https://threadpacket.com/mcp --auth oauth` instead, add `trust: untrusted` to the entry that command creates. With it, Hermes asks you before each Threadpacket tool call, because the tools send files to other people, revoke packets and invite members, and refuses them in unattended runs such as cron.
 
 ## What you need
 
@@ -40,7 +54,7 @@ A Threadpacket team. Create one at [threadpacket.com/join](https://threadpacket.
 ## What it sends, and where
 
 - The brief and the title go to threadpacket.com, with the files you chose. Nothing is sent until you ask to send a packet, or say yes when the assistant offers one.
-- To attach a file from your computer, the assistant calls `threadpacket_upload_url` and runs the `curl` command (macOS, Linux) or `powershell` command (Windows) that the server returns. That command uploads that one file to threadpacket.com and nothing else.
+- To attach a file from your computer, the assistant calls `threadpacket_upload_url`, checks that the upload address it gets back is on threadpacket.com, and uploads that one file with a fixed `curl` command (macOS, Linux) or `Invoke-WebRequest` command (Windows). The server returns only the address and the file's type, never a command to run.
 - In Claude apps, attaching a file from the chat needs `threadpacket.com` in Settings > Capabilities > allowed domains. Without it the upload fails with a 403 error.
 - Packets are kept 7 days by default and 30 days at most, then deleted. Files of any type, up to 25 MiB each and 10 per packet.
 - Threadpacket stores what you send as you sent it and runs no AI on it. In Threadpacket, only you and the people you sent it to can open it. It is not end-to-end encrypted; the Privacy page says who can technically read it.
@@ -49,4 +63,4 @@ A Threadpacket team. Create one at [threadpacket.com/join](https://threadpacket.
 
 ## Your own server
 
-Threadpacket is open source. If your team runs its own Threadpacket server, change the URL in `.mcp.json` (Claude Code) and `mcp.json` (ChatGPT, Codex) to your server's `/mcp` address before you install.
+Threadpacket is open source. If your team runs its own Threadpacket server, change the URL in `.mcp.json` (Claude Code) and `mcp.json` (ChatGPT, Codex) to your server's `/mcp` address before you install. In Hermes, use that address as the `url` of the `config.yaml` entry above.

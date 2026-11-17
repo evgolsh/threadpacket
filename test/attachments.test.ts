@@ -174,7 +174,6 @@ describe("attachments in packets", () => {
   it("upload tickets are single use and bound to one attachment", async () => {
     const a = await alice();
     const t = expectOk(await call(a, "threadpacket_upload_url", { filename: "codeword.pdf", mime_type: "application/pdf" }));
-    expect(String(t.curl)).toContain("curl");
     const url = String(t.upload_url);
 
     const put = await SELF.fetch(url, { method: "PUT", headers: { "content-type": "application/pdf" }, body: PDF });

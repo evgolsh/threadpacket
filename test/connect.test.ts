@@ -25,6 +25,7 @@ describe("connect and homepage (Courier Hybrid)", () => {
     expect(html).toContain(`data-copy="${ORIGIN}/mcp"`);
     expect(html).toContain(`claude mcp add --transport http --scope user threadpacket ${ORIGIN}/mcp`);
     expect(html).toContain(`hermes mcp add threadpacket --url ${ORIGIN}/mcp --auth oauth`);
+    expect(html).toContain("<code>trust: untrusted</code>");
     expect(html).toContain(`codex mcp add threadpacket --url ${ORIGIN}/mcp`);
     for (const host of ["Claude Code", "Hermes", "Claude", "Codex", "ChatGPT"]) {
       expect(html).toContain(`<span class="tab-name">${host}</span>`);

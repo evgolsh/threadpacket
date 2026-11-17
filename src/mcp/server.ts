@@ -7,7 +7,6 @@ import { declaredUploadType, isInlineTextType, isUtf8Text } from "../domain/file
 import { base64 } from "../domain/ids";
 import { handleOf, shownRecipient } from "../domain/tenant";
 import type { AttachmentDescriptor, ThreadpacketService, HostFile, Pickup } from "../domain/service";
-import { uploadCommands } from "./commands";
 import { createInvitation } from "../domain/invites";
 import { VERSION } from "../version";
 
@@ -391,9 +390,11 @@ export function buildMcpServer(svc: ThreadpacketService, principal: Principal, d
       title: "Get an upload URL",
       description:
         "Prepare an attachment slot and return a single-use upload URL, valid 15 minutes, for a file on the user's machine (for example from Codex or a terminal). " +
-        "Upload the raw bytes with HTTP PUT: run the returned `curl` command (macOS, Linux) or `powershell` command (Windows) in the folder that holds the file, " +
-        "then pass the attachment_id to threadpacket_send. Do not write your own command by pasting the file name into a shell. Never send file contents through this tool. " +
-        `In Claude, if the upload fails with "CONNECT tunnel failed, response 403", Claude blocked it before it reached this server: ask the user to add ${new URL(cfg.publicUrl).host} to Claude's allowed domains in Settings > Capabilities (on Team and Enterprise plans an owner does this in Admin settings), then run the same command again. ` +
+        `Upload the file's raw bytes with HTTP PUT to upload_url, sending the returned headers, then pass the attachment_id to threadpacket_send. First check that upload_url starts with ${cfg.publicUrl}/v1/uploads/. ` +
+        "From a shell, use this fixed command with the file's full path, the content type and the URL each in single quotes: " +
+        "`curl -fsS -X PUT --upload-file '<full path>' -H 'content-type: <type>' '<upload_url>'` (macOS, Linux; write a ' inside quotes as '\\''), or " +
+        "`$ProgressPreference = 'SilentlyContinue'; Invoke-WebRequest -UseBasicParsing -Method Put -InFile '<full path>' -ContentType '<type>' -Uri '<upload_url>'` (Windows PowerShell; double each ' ‘ ’ ‚ ‛ inside quotes). Never send file contents through this tool. " +
+        `In Claude, if the upload fails with "CONNECT tunnel failed, response 403", Claude blocked it before it reached this server: ask the user to add ${new URL(cfg.publicUrl).host} to Claude's allowed domains in Settings > Capabilities (on Team and Enterprise plans an owner does this in Admin settings), then upload again. ` +
         `If they cannot, they upload the file at ${cfg.publicUrl}/packets and you attach it by name with attachment_names.`,
       inputSchema: {
         filename: z.string().min(1).max(255).describe("The file's name, without folders, as it is on disk."),
@@ -405,8 +406,6 @@ export function buildMcpServer(svc: ThreadpacketService, principal: Principal, d
         method: z.literal("PUT"),
         headers: z.record(z.string(), z.string()),
         expires_at: z.string(),
-        curl: z.string(),
-        powershell: z.string(),
         max_bytes: z.number(),
       },
       annotations: { title: "Get an upload URL", readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
@@ -417,22 +416,18 @@ export function buildMcpServer(svc: ThreadpacketService, principal: Principal, d
         const row = await svc.createUpload(principal, { filename: args.filename, mime_type: contentType });
         const ticket = await svc.issueTicket("upload", principal.subject, row.id, null);
         const upload_url = `${cfg.publicUrl}/v1/uploads/${row.id}?ticket=${ticket.token}`;
-        const cmds = uploadCommands(row.filename, upload_url, contentType);
         const out = {
           attachment_id: row.id,
           upload_url,
           method: "PUT" as const,
           headers: { "content-type": contentType },
           expires_at: ticket.expires_at,
-          curl: cmds.curl,
-          powershell: cmds.powershell,
           max_bytes: cfg.maxAttachmentBytes,
         };
         return {
           content: [
             text(
-              `attachment_id ${row.id}. In the folder that holds ${JSON.stringify(row.filename)}, upload with:\n` +
-                `macOS/Linux: ${cmds.curl}\nWindows PowerShell: ${cmds.powershell}\n` +
+              `attachment_id ${row.id}. PUT the raw bytes of ${JSON.stringify(row.filename)} to ${upload_url} with content-type: ${contentType}. ` +
                 `The URL is single use and expires ${ticket.expires_at}. Then pass the attachment_id to threadpacket_send.`,
             ),
           ],

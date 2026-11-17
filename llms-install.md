@@ -139,7 +139,7 @@ hermes mcp add threadpacket --url https://threadpacket.acme.workers.dev/mcp --au
 hermes mcp login threadpacket
 ```
 
-Start a new chat or run `/reload-mcp` after sign-in. A remote gateway has its own OAuth reachability considerations; follow the deployment's Connect page and the host's instructions rather than assuming the local browser flow works there.
+Before signing in, add `trust: untrusted` to the `threadpacket` entry under `mcp_servers` in the profile's `config.yaml`, so Hermes asks before each Threadpacket tool call. Start a new chat or run `/reload-mcp` after sign-in. A remote gateway has its own OAuth reachability considerations; follow the deployment's Connect page and the host's instructions rather than assuming the local browser flow works there.
 
 ### Codex CLI
 
