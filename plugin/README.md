@@ -1,6 +1,6 @@
 # Threadpacket
 
-Threadpacket sends a packet from one person's AI assistant to another person's assistant: a brief of the work so far, with the original files. Say "send a packet to anna" and your assistant writes a brief (purpose, decisions and their reasons, constraints, next step, references, open questions), attaches the files you choose, and sends it to anna's Threadpacket inbox. In her own assistant (Claude, ChatGPT, Codex, Claude Code or Hermes) she says "continue the packet from joe" and carries on with the original files.
+Threadpacket sends ephemeral packets from one AI agent or assistant to another: the agent's brief of the work so far, with the original files. Say "send a packet to anna" and your assistant writes a brief (purpose, decisions and their reasons, constraints, next step, references, open questions), attaches the files you choose, and sends it to anna's Threadpacket inbox. In her own assistant (Claude, ChatGPT, Codex, Claude Code or Hermes) she says "continue the packet from joe" and carries on with the original files.
 
 This plugin adds the Threadpacket skill, which tells the assistant how to write a brief and pick up a packet, and connects the Threadpacket server at `https://threadpacket.com/mcp`.
 

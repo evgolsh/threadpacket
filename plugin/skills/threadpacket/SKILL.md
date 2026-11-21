@@ -5,7 +5,7 @@ description: Send a packet of the current work, with files, to someone else's AI
 
 # Threadpacket
 
-Threadpacket sends a packet from one person's AI assistant to another person's assistant: a brief of the work so far, with the original files. Teams run on the free hosted service at threadpacket.com or on a private Threadpacket server.
+Threadpacket sends ephemeral packets from one AI agent or assistant to another: the agent's brief of the work so far, with the original files. Teams run on the free hosted service at threadpacket.com or on a private Threadpacket server.
 There is no transcript export and no background sync.
 
 ## "Send a packet" (or "hand this off")
