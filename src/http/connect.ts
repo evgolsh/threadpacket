@@ -64,9 +64,13 @@ export function hosts(url: string, control = false): Host[] {
       tag: "Tested",
       status: "Tested with Threadpacket on macOS (Hermes Agent CLI and gateway): sign-in, files, send, read and revoke.",
       steps: [
-        { text: "Add the server with OAuth:", command: `hermes mcp add threadpacket --url ${url} --auth oauth` },
         {
-          text: "In your profile's `config.yaml`, add `trust: untrusted` to the `threadpacket` entry under `mcp_servers`, so Hermes asks you before each Threadpacket tool call that sends, revokes, invites or uploads. If you installed the Threadpacket plugin, this entry replaces the plugin's own, so keep the setting here.",
+          text: "Install the Threadpacket plugin from the [Hermes catalog](https://hermes-agent.nousresearch.com/docs/plugins/threadpacket), and enable it if asked. It adds the skill that writes the brief:",
+          command: "hermes plugins install threadpacket",
+        },
+        { text: "Add the server with OAuth, so you can sign in:", command: `hermes mcp add threadpacket --url ${url} --auth oauth` },
+        {
+          text: "In your profile's `config.yaml`, add `trust: untrusted` to the `threadpacket` entry under `mcp_servers`, so Hermes asks you before each Threadpacket tool call that sends, revokes, invites or uploads. This entry replaces the plugin's own, so keep the setting here.",
         },
         { text: "Sign in and approve access:", command: "hermes mcp login threadpacket" },
         { text: "Start a new chat or run `/reload-mcp`." },
@@ -360,7 +364,8 @@ function nextSteps(control: boolean, viewer?: Viewer): string {
   const invite: Say = { label: `Invite your ${partner}`, quote: `Invite my ${partner} to Threadpacket.`, copy: true };
   const send: Say = { label: "Send a packet", quote: `Send a packet to ${other}.` };
   const pickUp: Say = { label: "Pick up a packet", quote: "Continue my packet.", copy: true };
-  const says = viewer ? (viewer.admin ? [invite, send] : [pickUp, send]) : [invite, send, pickUp];
+  const solo: Say = { label: "Try it on your own", quote: "Send myself a packet.", copy: true };
+  const says = viewer ? (viewer.admin ? [solo, invite, send] : [pickUp, send]) : [solo, invite, send, pickUp];
   return `<ol class="say-strip" aria-label="First prompts">
     ${says
       .map(

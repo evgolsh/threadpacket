@@ -24,6 +24,8 @@ describe("connect and homepage (Courier Hybrid)", () => {
     const html = await res.text();
     expect(html).toContain(`data-copy="${ORIGIN}/mcp"`);
     expect(html).toContain(`claude mcp add --transport http --scope user threadpacket ${ORIGIN}/mcp`);
+    expect(html).toContain("<code>hermes plugins install threadpacket</code>");
+    expect(html).toContain('<a href="https://hermes-agent.nousresearch.com/docs/plugins/threadpacket" target="_blank" rel="noopener">Hermes catalog</a>');
     expect(html).toContain(`hermes mcp add threadpacket --url ${ORIGIN}/mcp --auth oauth`);
     expect(html).toContain("<code>trust: untrusted</code>");
     expect(html).toContain(`codex mcp add threadpacket --url ${ORIGIN}/mcp`);

@@ -57,7 +57,8 @@ describe("the hosted story: joe and anna", () => {
     const setup = await text("/connect");
     expect(setup).toContain("New to Threadpacket? Create your team when you sign in.");
     expect(setup).toContain("<strong>Create a team</strong> if you&#39;re new");
-    expect(cards(setup)).toEqual(["Invite your partner", "Send a packet", "Pick up a packet"]);
+    expect(cards(setup)).toEqual(["Try it on your own", "Invite your partner", "Send a packet", "Pick up a packet"]);
+    expect(setup).toContain("“Send myself a packet.”");
     expect(setup).toContain("“Send a packet to anna.”");
     hostedStory(setup, "/connect");
 
@@ -80,10 +81,10 @@ describe("the hosted story: joe and anna", () => {
     const fields = Object.fromEntries([...createdPage.matchAll(/<input type="hidden" name="([a-z_]+)" value="([^"]*)">/g)].map((m) => [m[1]!, m[2]!]));
     expect((await fetchAs("/authorize", form(fields))).status).toBe(302);
 
-    // In the browser, joe's Assistant setup shows what an admin does next: invite, then send a packet.
+    // In the browser, joe's Assistant setup shows what an admin does next: try it alone, invite, then send a packet.
     const joe = await signIn(team, "joe", joeCode);
     const joeSetup = await text("/connect", joe);
-    expect(cards(joeSetup)).toEqual(["Invite your partner", "Send a packet"]);
+    expect(cards(joeSetup)).toEqual(["Try it on your own", "Invite your partner", "Send a packet"]);
     expect(joeSetup).toContain("“Invite my partner to Threadpacket.”");
     hostedStory(joeSetup, "/connect (joe)");
 
