@@ -4,19 +4,23 @@ import { ThreadpacketService } from "./domain/service";
 import { D1Repository } from "./store/d1";
 import { blobStore } from "./store/blobs";
 import { pruneRecords, recordEvent, type RecordsPruned } from "./store/events";
+import { rollUpDailyTotals } from "./store/totals";
 
 export type CleanupResult = { attachments_deleted: number; packets_deleted: number; backlog: boolean } & RecordsPruned;
 
 /**
  * One cleanup run: expired packets and stale files (src/domain/service.ts), then records that no longer do
- * anything (src/store/events.ts). Runs hourly (wrangler.jsonc triggers) and from the console's Ops page.
+ * anything (src/store/events.ts), and on the control center the daily totals (src/store/totals.ts). Runs hourly (wrangler.jsonc triggers) and from the console's Ops page.
  * The run is recorded as an event and logged; a failed run is rethrown.
  */
 export async function runCleanup(env: Env, trigger: "schedule" | "console", by: string | null = null): Promise<CleanupResult> {
   const started = Date.now();
   try {
-    const service = new ThreadpacketService(new D1Repository(env.DB), blobStore(env), configFrom(env));
+    const cfg = configFrom(env);
+    const service = new ThreadpacketService(new D1Repository(env.DB), blobStore(env), cfg);
     const result: CleanupResult = { ...(await service.cleanup()), ...(await pruneRecords(env.DB)) };
+    // The control center keeps daily totals of outside activity past the 30 days of activity records.
+    if (cfg.mode === "control") await rollUpDailyTotals(env.DB);
     const ms = Date.now() - started;
     await recordEvent(env.DB, { kind: "cleanup", name: trigger, subject: by, outcome: result.backlog ? "backlog" : "ok", ms, detail: { ...result } });
     console.log(JSON.stringify({ level: result.backlog ? "warn" : "info", event: "cleanup", trigger, ms, ...result }));

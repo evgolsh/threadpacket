@@ -476,7 +476,7 @@ export function privacyMd(cfg: Config): string {
 title: Threadpacket privacy policy
 description: What Threadpacket stores, for how long, who can see it, and how to have it deleted.
 canonical: ${f.site}/privacy
-last-updated: 2026-11-11
+last-updated: 2026-11-21
 ---
 
 # Privacy
@@ -493,14 +493,14 @@ Threadpacket has no AI inside: it makes no model calls, and nothing you send is 
 - **Sign-ins:** the assistants you connected (the name each app gives) and their refresh tokens, stored as hashes. Access tokens are not stored.
 - **Pickups:** when each recipient's assistant picked a packet up, with that assistant's name, and when they first opened it in Packets. Kept until the packet is deleted.
 - **Activity:** which tool was called, when, by which username, and whether it worked. Not the content.
-- **Abuse limits:** when you sign in or create a team, a hash of your IP address, to slow down guessing. It is deleted after 10 minutes.
+${f.hosted ? "- **Page visits:** how many times each public page was opened each day, with the referring site and the country. No cookie, IP address or other identifier, so a visit cannot be traced to anyone.\n" : ""}- **Abuse limits:** when you sign in or create a team, a hash of your IP address, to slow down guessing. It is deleted after 10 minutes.
 
 ## How long
 
 - Packets are deleted ${days(f.days)} after they are sent by default (the sender can choose up to ${days(f.maxDays)}), or as soon as the sender revokes them; the stored rows are removed within 7 days after that.
 - Files nobody sent are deleted after 7 days.
-- Activity records are deleted after 30 days. Expired sign-ins are deleted every hour.
-- Your username stays until you or your team's admin removes it.
+- Activity records are deleted after 30 days${f.hosted ? "; daily totals without usernames are kept" : ""}. Expired sign-ins are deleted every hour.
+${f.hosted ? "- Page visit counts are deleted after 400 days.\n" : ""}- Your username stays until you or your team's admin removes it.
 
 ## Who can see it
 
@@ -981,7 +981,7 @@ export function notFoundMarkdown(cfg: Config): Response {
   return new Response(NOT_FOUND_MD(cfg), { status: 404, headers: { ...MD_HEADERS, "cache-control": "no-store" } });
 }
 
-const PRIVACY_UPDATED = "11 November 2026";
+const PRIVACY_UPDATED = "21 November 2026";
 const TERMS_UPDATED = "11 November 2026";
 
 /**

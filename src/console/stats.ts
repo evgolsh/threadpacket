@@ -1,6 +1,6 @@
 import type { Config, Env } from "../env";
 import { updateState, type UpdateState } from "../update-check";
-import { handleOf, teamOf, tenantWhere } from "../domain/tenant";
+import { handleOf, outsideWhere, teamOf, tenantWhere } from "../domain/tenant";
 import { blobStore } from "../store/blobs";
 
 /**
@@ -558,57 +558,202 @@ export interface TenantRow {
   slug: string;
   name: string;
   created_at: string;
+  /** Marked internal by the operator: listed, but left out of the outside counts. */
+  internal: boolean;
   members: number;
   packets_live: number;
   reads_7d: number;
   last_seen: string | null;
 }
 
+/** Sign-up funnel over 28 days: page views (not people), then the outside teams created and how far each got. */
+export interface FunnelData {
+  homeViews: number;
+  joinViews: number;
+  teams: number;
+  connected: number;
+  sent: number;
+  read: number;
+}
+
+/** Page views of the public pages (src/store/pageviews.ts). */
+export interface WebData {
+  views7d: number;
+  views28d: number;
+  pages: Array<{ path: string; d7: number; d28: number }>;
+  /** Where visits came from in 28 days, this site's own links left out. "" is no referring site and no tag. */
+  sources: Array<{ source: string; n: number }>;
+  countries: Array<{ country: string; n: number }>;
+  days: Array<{ date: string; views: number }>;
+}
+
+export interface WeekRow {
+  /** The Monday the week starts on. */
+  week: string;
+  views: number;
+  joins: number;
+  sends: number;
+  reads: number;
+  /** Users in the 7 days to the week's last kept day, or null when no total was kept that week. */
+  users: number | null;
+}
+
 export interface ControlCenterData {
   now: number;
   tenants: TenantRow[];
-  totals: { tenants: number; members: number };
-  /** The KPI: distinct identities that read a packet (threadpacket_read ok). */
+  /** Outside teams and their members; internal teams are counted apart. */
+  totals: { tenants: number; members: number; internal: number };
+  /** The KPI: distinct outside identities that read a packet (threadpacket_read ok). */
   users: { d7: number; d28: number };
   activity: { sends_7d: number; reads_7d: number; round_trips_7d: number };
   instances: { d7: number; d28: number; byVersion: Array<{ version: string; n: number }>; byMembers: Array<{ members: string; n: number }> };
   deployClicks30d: number;
   assistants: Array<{ name: string; n: number }>;
   days: Array<{ date: string; sends: number; reads: number }>;
+  web: WebData;
+  funnel: FunnelData;
+  weeks: WeekRow[];
 }
 
-/** The operator's view of the whole project: every tenant, the users KPI, instances in the wild, Deploy clicks. */
+const dayOf = (ms: number): string => new Date(ms).toISOString().slice(0, 10);
+const WEEKS = 12;
+
+async function webData(db: D1Database, now: number): Promise<WebData> {
+  const d7 = dayOf(now - 6 * DAY);
+  const d28 = dayOf(now - 27 * DAY);
+  const stripStart = dayOf(now - (STRIP_DAYS - 1) * DAY);
+  const rows = await all<{ day: string; path: string; source: string; country: string; n: number }>(
+    db,
+    "SELECT day, path, source, country, n FROM page_views WHERE day >= ?",
+    d28,
+  );
+  const pages = new Map<string, { d7: number; d28: number }>();
+  const sources = new Map<string, number>();
+  const countries = new Map<string, number>();
+  const perDay = new Map<string, number>();
+  let views7d = 0;
+  let views28d = 0;
+  for (const r of rows) {
+    const p = pages.get(r.path) ?? { d7: 0, d28: 0 };
+    p.d28 += r.n;
+    views28d += r.n;
+    if (r.day >= d7) {
+      p.d7 += r.n;
+      views7d += r.n;
+    }
+    pages.set(r.path, p);
+    if (r.source !== "self") sources.set(r.source, (sources.get(r.source) ?? 0) + r.n);
+    if (r.country) countries.set(r.country, (countries.get(r.country) ?? 0) + r.n);
+    if (r.day >= stripStart) perDay.set(r.day, (perDay.get(r.day) ?? 0) + r.n);
+  }
+  const top = (m: Map<string, number>, n: number) => [...m.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).slice(0, n);
+  return {
+    views7d,
+    views28d,
+    pages: [...pages.entries()].map(([path, v]) => ({ path, ...v })).sort((a, b) => b.d28 - a.d28 || a.path.localeCompare(b.path)),
+    sources: top(sources, 12).map(([source, n]) => ({ source, n })),
+    countries: top(countries, 8).map(([country, n]) => ({ country, n })),
+    days: Array.from({ length: STRIP_DAYS }, (_, i) => {
+      const date = dayOf(now - (STRIP_DAYS - 1 - i) * DAY);
+      return { date, views: perDay.get(date) ?? 0 };
+    }),
+  };
+}
+
+async function funnelData(db: D1Database, pages: WebData["pages"], now: number): Promise<FunnelData> {
+  const views = (path: string) => pages.find((p) => p.path === path)?.d28 ?? 0;
+  const inTeam = "e.subject >= t.slug || '/' AND e.subject < t.slug || '0'";
+  const tool = (name: string) => `EXISTS (SELECT 1 FROM events e WHERE e.kind = 'tool' AND e.name = '${name}' AND e.outcome = 'ok' AND ${inTeam})`;
+  const t = await one<{ teams: number; connected: number | null; sent: number | null; was_read: number | null }>(
+    db,
+    `SELECT COUNT(*) AS teams,
+       SUM(EXISTS (SELECT 1 FROM events e WHERE e.kind IN ('initialize', 'token') AND ${inTeam})) AS connected,
+       SUM(${tool("threadpacket_send")}) AS sent,
+       SUM(${tool("threadpacket_read")}) AS was_read
+     FROM tenants t WHERE t.internal = 0 AND t.created_at >= ?`,
+    dayOf(now - 27 * DAY),
+  );
+  return {
+    homeViews: views("/") + views("/use-cases"),
+    joinViews: views("/join"),
+    teams: t?.teams ?? 0,
+    connected: t?.connected ?? 0,
+    sent: t?.sent ?? 0,
+    read: t?.was_read ?? 0,
+  };
+}
+
+/** The last 12 weeks from the daily totals (src/store/totals.ts) and page views, from the first week with a count above 0. */
+async function weekRows(db: D1Database, now: number): Promise<WeekRow[]> {
+  const monday = dayOf(now - ((new Date(now).getUTCDay() + 6) % 7) * DAY);
+  const mondayMs = Date.parse(monday);
+  const starts = Array.from({ length: WEEKS }, (_, i) => dayOf(mondayMs - (WEEKS - 1 - i) * 7 * DAY));
+  const first = starts[0]!;
+  const totals = await all<{ day: string; metric: string; n: number }>(db, "SELECT day, metric, n FROM daily_totals WHERE day >= ?", first);
+  const views = await all<{ day: string; n: number }>(db, "SELECT day, SUM(n) AS n FROM page_views WHERE day >= ? GROUP BY day", first);
+  const weekOf = (day: string) => starts.filter((s) => s <= day).pop()!;
+  const rows = new Map(starts.map((week) => [week, { week, views: 0, joins: 0, sends: 0, reads: 0, users: null as number | null, usersDay: "" }]));
+  for (const v of views) rows.get(weekOf(v.day))!.views += v.n;
+  for (const t of totals) {
+    const r = rows.get(weekOf(t.day))!;
+    if (t.metric === "joins") r.joins += t.n;
+    else if (t.metric === "sends") r.sends += t.n;
+    else if (t.metric === "reads") r.reads += t.n;
+    else if (t.metric === "users_7d" && t.day > r.usersDay) {
+      r.users = t.n;
+      r.usersDay = t.day;
+    }
+  }
+  const list = [...rows.values()].map(({ usersDay: _, ...r }) => r);
+  const from = list.findIndex((r) => r.views || r.joins || r.sends || r.reads || r.users);
+  return from === -1 ? [] : list.slice(from);
+}
+
+/**
+ * The operator's view of the whole project: every tenant, the users KPI, visits and the sign-up funnel, weekly
+ * history, instances in the wild, Deploy clicks. Activity counts cover outside teams only (outsideWhere).
+ */
 export async function controlCenter(db: D1Database, now = Date.now()): Promise<ControlCenterData> {
   const nowIso = new Date(now).toISOString();
   const d7 = isoAgo(now, 7 * DAY);
   const d28 = isoAgo(now, 28 * DAY);
   const d30 = isoAgo(now, 30 * DAY);
   const stripStart = new Date(now - (STRIP_DAYS - 1) * DAY).toISOString().slice(0, 10);
-  const tenants = await all<TenantRow>(
-    db,
-    `SELECT t.slug, t.name, t.created_at,
+  const out = outsideWhere("subject");
+  const tenants = (
+    await all<Omit<TenantRow, "internal"> & { internal: number }>(
+      db,
+      `SELECT t.slug, t.name, t.created_at, t.internal,
        (SELECT COUNT(*) FROM members m WHERE m.handle >= t.slug || '/' AND m.handle < t.slug || '0') AS members,
        (SELECT COUNT(*) FROM packets p WHERE p.owner >= t.slug || '/' AND p.owner < t.slug || '0' AND p.revoked_at IS NULL AND p.expires_at > ?) AS packets_live,
        (SELECT COUNT(*) FROM events e WHERE e.kind = 'tool' AND e.name = 'threadpacket_read' AND e.outcome = 'ok' AND ts >= ? AND e.subject >= t.slug || '/' AND e.subject < t.slug || '0') AS reads_7d,
        (SELECT MAX(e.ts) FROM events e WHERE e.subject >= t.slug || '/' AND e.subject < t.slug || '0') AS last_seen
      FROM tenants t ORDER BY last_seen DESC, t.created_at DESC`,
-    nowIso,
-    d7,
+      nowIso,
+      d7,
+    )
+  ).map((t) => ({ ...t, internal: !!t.internal }));
+  const totals = await one<{ tenants: number; members: number; internal: number }>(
+    db,
+    `SELECT (SELECT COUNT(*) FROM tenants WHERE internal = 0) AS tenants,
+            (SELECT COUNT(*) FROM members WHERE ${outsideWhere("handle")}) AS members,
+            (SELECT COUNT(*) FROM tenants WHERE internal = 1) AS internal`,
   );
-  const totals = await one<{ tenants: number; members: number }>(db, "SELECT (SELECT COUNT(*) FROM tenants) AS tenants, (SELECT COUNT(*) FROM members WHERE instr(handle, '/') > 0) AS members");
+  const reads = `kind = 'tool' AND name = 'threadpacket_read' AND outcome = 'ok' AND ${out}`;
+  const sends = `kind = 'tool' AND name = 'threadpacket_send' AND outcome = 'ok' AND ${out}`;
   const users = await one<{ d7: number; d28: number }>(
     db,
-    `SELECT (SELECT COUNT(DISTINCT subject) FROM events WHERE kind = 'tool' AND name = 'threadpacket_read' AND outcome = 'ok' AND ts >= ?) AS d7,
-            (SELECT COUNT(DISTINCT subject) FROM events WHERE kind = 'tool' AND name = 'threadpacket_read' AND outcome = 'ok' AND ts >= ?) AS d28`,
+    `SELECT (SELECT COUNT(DISTINCT subject) FROM events WHERE ${reads} AND ts >= ?) AS d7,
+            (SELECT COUNT(DISTINCT subject) FROM events WHERE ${reads} AND ts >= ?) AS d28`,
     d7,
     d28,
   );
   const activity = await one<{ sends_7d: number; reads_7d: number; round_trips_7d: number }>(
     db,
-    `SELECT (SELECT COUNT(*) FROM events WHERE kind = 'tool' AND name = 'threadpacket_send' AND outcome = 'ok' AND ts >= ?) AS sends_7d,
-            (SELECT COUNT(*) FROM events WHERE kind = 'tool' AND name = 'threadpacket_read' AND outcome = 'ok' AND ts >= ?) AS reads_7d,
-            (SELECT COUNT(*) FROM (SELECT DISTINCT subject FROM events WHERE kind = 'tool' AND name = 'threadpacket_read' AND outcome = 'ok' AND ts >= ?
-                                   AND subject IN (SELECT subject FROM events WHERE kind = 'tool' AND name = 'threadpacket_send' AND outcome = 'ok' AND ts >= ?))) AS round_trips_7d`,
+    `SELECT (SELECT COUNT(*) FROM events WHERE ${sends} AND ts >= ?) AS sends_7d,
+            (SELECT COUNT(*) FROM events WHERE ${reads} AND ts >= ?) AS reads_7d,
+            (SELECT COUNT(*) FROM (SELECT DISTINCT subject FROM events WHERE ${reads} AND ts >= ?
+                                   AND subject IN (SELECT subject FROM events WHERE ${sends} AND ts >= ?))) AS round_trips_7d`,
     d7,
     d7,
     d7,
@@ -625,12 +770,12 @@ export async function controlCenter(db: D1Database, now = Date.now()): Promise<C
   const clicks = await one<{ n: number }>(db, "SELECT COUNT(*) AS n FROM events WHERE kind = 'visit' AND name = 'deploy' AND ts >= ?", d30);
   const assistantsSeen = await all<{ name: string; n: number }>(
     db,
-    "SELECT name, COUNT(DISTINCT subject) AS n FROM events WHERE kind = 'initialize' AND ts >= ? AND name IS NOT NULL GROUP BY name ORDER BY n DESC LIMIT 12",
+    `SELECT name, COUNT(DISTINCT subject) AS n FROM events WHERE kind = 'initialize' AND ts >= ? AND name IS NOT NULL AND ${out} GROUP BY name ORDER BY n DESC LIMIT 12`,
     d28,
   );
   const perDay = await all<{ d: string; name: string; n: number }>(
     db,
-    "SELECT substr(ts, 1, 10) AS d, name, COUNT(*) AS n FROM events WHERE kind = 'tool' AND name IN ('threadpacket_send', 'threadpacket_read') AND outcome = 'ok' AND ts >= ? GROUP BY d, name",
+    `SELECT substr(ts, 1, 10) AS d, name, COUNT(*) AS n FROM events WHERE kind = 'tool' AND name IN ('threadpacket_send', 'threadpacket_read') AND outcome = 'ok' AND ts >= ? AND ${out} GROUP BY d, name`,
     stripStart,
   );
   const days = Array.from({ length: STRIP_DAYS }, (_, i) => {
@@ -638,20 +783,24 @@ export async function controlCenter(db: D1Database, now = Date.now()): Promise<C
     const on = (name: string) => perDay.find((r) => r.d === date && r.name === name)?.n ?? 0;
     return { date, sends: on("threadpacket_send"), reads: on("threadpacket_read") };
   });
+  const web = await webData(db, now);
   return {
     now,
     tenants,
-    totals: { tenants: totals?.tenants ?? 0, members: totals?.members ?? 0 },
+    totals: { tenants: totals?.tenants ?? 0, members: totals?.members ?? 0, internal: totals?.internal ?? 0 },
     users: { d7: users?.d7 ?? 0, d28: users?.d28 ?? 0 },
     activity: { sends_7d: activity?.sends_7d ?? 0, reads_7d: activity?.reads_7d ?? 0, round_trips_7d: activity?.round_trips_7d ?? 0 },
     instances: { d7: inst?.d7 ?? 0, d28: inst?.d28 ?? 0, byVersion, byMembers },
     deployClicks30d: clicks?.n ?? 0,
     assistants: assistantsSeen,
     days,
+    web,
+    funnel: await funnelData(db, web.pages, now),
+    weeks: await weekRows(db, now),
   };
 }
 
-/** The public counters at /stats: numbers only, no tenant or member names. */
+/** The public counters at /stats: numbers only, no tenant or member names, outside teams only. */
 export async function publicStats(db: D1Database, now = Date.now()): Promise<Record<string, number | string>> {
   const c = await controlCenter(db, now);
   return {

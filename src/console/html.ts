@@ -98,7 +98,8 @@ nav.side .nav-separator{height:1px;background:var(--line-soft);margin:10px 8px}
 .panel.flush>.note{border-top:1px solid var(--line-soft)}
 .grid3{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px}
 .grid2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,2fr);gap:12px}
-@media (max-width:900px){.grid2{grid-template-columns:1fr}}
+.grid2.even{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.grid2.wide{grid-template-columns:minmax(0,2fr) minmax(0,1fr)}
+@media (max-width:900px){.grid2,.grid2.even,.grid2.wide{grid-template-columns:1fr}}
 .big{font-size:32px;font-weight:600;line-height:1;letter-spacing:-.03em}
 .days{display:grid;grid-template-columns:repeat(14,minmax(0,1fr));gap:3px;align-items:end;height:56px;margin-top:6px}
 .days i{display:block;background:var(--accent);border-radius:3px 3px 0 0;min-height:2px}

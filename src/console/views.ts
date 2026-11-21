@@ -267,7 +267,7 @@ ${note ? flash(note.text, note.ok) : ""}
   </table>
   <div class="note small muted"><strong>assistants</strong>: assistants signed in now. <strong>sent</strong> and <strong>to them</strong>: live packets (not expired or revoked); sent includes notes to self. Packets to the whole team: ${num(data.teamPackets)} live, readable by every member.</div>
 </section>
-<section class="grid2" style="grid-template-columns:minmax(0,1fr) minmax(0,1fr)">
+<section class="grid2 even">
   <form method="post" action="/console/members" class="panel" autocomplete="off">
     <div class="t">Add a member</div>
     <div class="small muted">The access code is shown once, on the next page. Share the sign-in details in private; they sign in to each assistant with their username and that code.</div>
@@ -422,7 +422,7 @@ ${flash(note)}
   </table>
   <div class="note small muted"><strong>assistant</strong> is the name the app gave when it registered with this server. <strong>announced as</strong> is the name and version it sent when it connected (MCP initialize). <strong>returns to</strong> is where sign-in sends the browser back: <span class="mono">localhost</span> means an app on that computer. <strong>Disconnect</strong> signs that assistant out at once: its refresh token stops working and its current access token is refused. Signing in again works.</div>
 </section>
-<section class="grid2" style="grid-template-columns:minmax(0,1fr) minmax(0,1fr)">
+<section class="grid2 even">
   <div class="panel scroll"><div class="t">Tokens refused <span class="muted small">· ${WINDOW_DAYS} days</span></div>${rejected}<div class="small muted">Expired tokens are normal: the assistant refreshes and retries. Many of anything else is worth a look.</div></div>
   <div class="panel scroll"><div class="t">Wrong sign-in codes <span class="muted small">· ${WINDOW_DAYS} days</span></div>${bad}</div>
 </section>
@@ -460,6 +460,8 @@ const AUDIT: Record<string, string> = {
   disconnect: "disconnected an assistant of",
   cleanup: "ran cleanup",
   delete_team: "deleted team",
+  team_internal: "marked internal: team",
+  team_outside: "counted as outside: team",
 };
 
 /** This version and what the daily update check learned (src/update-check.ts). */
@@ -573,23 +575,59 @@ export function opsPage(v: Viewer, cfg: Config, d: OpsData, note: string | null)
     "Ops",
     `${head("Ops", "deployment, database, cleanup · hover a time for UTC")}
 ${flash(note)}
-<section class="grid2" style="grid-template-columns:minmax(0,1fr) minmax(0,1fr)">${deployment}${database}</section>
-<section class="grid2" style="grid-template-columns:minmax(0,2fr) minmax(0,1fr)">${cleanups}<div class="panel scroll"><div class="t">Files in storage</div>${files}<div class="small muted">ready = uploaded and checked; staging = upload not finished (removed after 24 h); failed = refused.</div></div></section>
+<section class="grid2 even">${deployment}${database}</section>
+<section class="grid2 wide">${cleanups}<div class="panel scroll"><div class="t">Files in storage</div>${files}<div class="small muted">ready = uploaded and checked; staging = upload not finished (removed after 24 h); failed = refused.</div></div></section>
 ${problems}
 ${audit}`,
   );
 }
 
-/** The control center's operator page: every tenant, the users KPI, instances in the wild, Deploy clicks. */
+/**
+ * The control center's operator page: the users KPI, visits and the sign-up funnel, weekly history, every team,
+ * private instances that check in. Activity counts cover outside teams; the operator marks the others internal.
+ */
 export function tenantsPage(v: Viewer, d: ControlCenterData, note: string | null = null): Html {
   const now = d.now;
   const tile = (label: string, value: string, sub = "") => `<div class="panel"><div class="small muted">${esc(label)}</div><div style="font-size:26px;font-weight:600;letter-spacing:-.02em">${value}</div>${sub ? `<div class="small muted">${sub}</div>` : ""}</div>`;
   const tiles = `<section class="grid3">
     ${tile("users, 28 days", num(d.users.d28), `${num(d.users.d7)} in 7 days · a user read a packet`)}
-    ${tile("teams", num(d.totals.tenants), `${plural(d.totals.members, "member")} in all`)}
+    ${tile("page views, 28 days", num(d.web.views28d), `${num(d.web.views7d)} in 7 days · public pages`)}
+    ${tile("teams", num(d.totals.tenants), `${plural(d.totals.members, "member")} in all${d.totals.internal ? ` · ${num(d.totals.internal)} internal not counted` : ""}`)}
+    ${tile("round trips, 7 days", num(d.activity.round_trips_7d), "people who both sent and read a packet")}
     ${tile("private instances alive", num(d.instances.d28), `${num(d.instances.d7)} checked in within 7 days`)}
-    ${tile("Deploy clicks, 30 days", num(d.deployClicks30d), `${plural(d.activity.round_trips_7d, "person")} completed a round trip this week`)}
+    ${tile("Deploy clicks, 30 days", num(d.deployClicks30d), "the Deploy to Cloudflare button")}
   </section>`;
+
+  const list = (rows: Array<{ k: string; n: number }>, empty: string) =>
+    rows.length ? rows.map((r) => `<div class="small" style="display:flex;justify-content:space-between"><span class="mono">${esc(r.k)}</span><span>${num(r.n)}</span></div>`).join("") : `<div class="small muted">${empty}</div>`;
+  const share = (n: number, of: number) => (of ? `${Math.round((n / of) * 100)}%` : "—");
+  const width = (n: number, max: number) => (max ? Math.round((n / max) * 100) : 0);
+
+  const f = d.funnel;
+  const step = (label: Html, n: number, of: number | null, max: number) =>
+    `<tr><td>${label}</td><td class="r">${num(n)}</td><td style="width:34%"><div class="bar"><i style="width:${width(n, max)}%"></i></div></td><td class="r muted">${of === null ? "" : share(n, of)}</td></tr>`;
+  const funnel = `<div class="panel flush">
+    <div class="t">Sign-up funnel, 28 days</div>
+    <table><thead><tr><th></th><th class="r">count</th><th></th><th class="r">of the row above</th></tr></thead><tbody>
+      ${step("Homepage views", f.homeViews, null, f.homeViews)}
+      ${step(`<span class="mono">/join</span> views`, f.joinViews, f.homeViews, f.homeViews)}
+      ${step("Teams created", f.teams, f.joinViews, f.teams)}
+      ${step("… connected an assistant", f.connected, f.teams, f.teams)}
+      ${step("… sent a packet", f.sent, f.connected, f.teams)}
+      ${step("… had a packet read", f.read, f.sent, f.teams)}
+    </tbody></table>
+    <div class="small muted" style="padding:10px 14px">Views are page loads, not people. Team rows follow the outside teams created in these 28 days.</div>
+  </div>`;
+
+  const sources = `<div class="panel">
+    <div class="t">Where visits came from, 28 days</div>${list(
+      d.web.sources.map((r) => ({ k: r.source || "direct or unknown", n: r.n })),
+      "No visits counted yet.",
+    )}
+    <div class="t" style="margin-top:12px">Countries</div>${list(d.web.countries.map((r) => ({ k: r.country, n: r.n })), "—")}
+    <div class="small muted" style="margin-top:8px">The referring site, or the tag in a link such as <span class="mono">/?ref=hn</span>. Clicks between this site's own pages are left out.</div>
+  </div>`;
+
   const maxDay = Math.max(1, ...d.days.map((x) => Math.max(x.sends, x.reads)));
   const strip = `<div class="panel">
     <div class="t">Sends and reads, ${STRIP_DAYS} days</div>
@@ -598,29 +636,59 @@ export function tenantsPage(v: Viewer, d: ControlCenterData, note: string | null
       .join("")}</div>
     <div class="small muted">grey: sent · blue: read · ${num(d.activity.sends_7d)} sent and ${num(d.activity.reads_7d)} read in 7 days</div>
   </div>`;
+
+  const maxViews = Math.max(1, ...d.web.days.map((x) => x.views));
+  const pages = `<div class="panel">
+    <div class="t">Page views, ${STRIP_DAYS} days</div>
+    <div class="days">${d.web.days.map((x) => `<i${x.views ? "" : ` class="zero"`} title="${x.date}: ${plural(x.views, "view")}" style="height:${Math.max(width(x.views, maxViews), 3)}%"></i>`).join("")}</div>
+    <table style="margin-top:10px"><thead><tr><th>page</th><th class="r">7 days</th><th class="r">28 days</th></tr></thead><tbody>${
+      d.web.pages.length
+        ? d.web.pages.map((p) => `<tr><td class="mono">${esc(p.path)}</td><td class="r">${num(p.d7)}</td><td class="r">${num(p.d28)}</td></tr>`).join("")
+        : `<tr><td colspan="3" class="muted">No visits counted yet.</td></tr>`
+    }</tbody></table>
+  </div>`;
+
+  const weeks = `<section class="panel flush scroll">
+    <div class="t">By week <span class="muted small">· outside teams · kept after the 30-day activity records are deleted</span></div>
+    <table><thead><tr><th>week of</th><th class="r">page views</th><th class="r">teams created</th><th class="r">packets sent</th><th class="r">packets read</th><th class="r">users, 7 days to week end</th></tr></thead><tbody>${
+      d.weeks.length
+        ? [...d.weeks]
+            .reverse()
+            .map((w) => `<tr><td class="mono nowrap">${esc(w.week)}</td><td class="r">${num(w.views)}</td><td class="r">${num(w.joins)}</td><td class="r">${num(w.sends)}</td><td class="r">${num(w.reads)}</td><td class="r">${w.users === null ? `<span class="muted">—</span>` : num(w.users)}</td></tr>`)
+            .join("")
+        : `<tr><td colspan="6" class="muted">Nothing yet. Totals are written by the hourly cleanup.</td></tr>`
+    }</tbody></table>
+  </section>`;
+
+  const toggle = (t: ControlCenterData["tenants"][number]) =>
+    `<form method="post" action="/console/tenants/${esc(t.slug)}/internal" class="inline">${csrfField(v)}<input type="hidden" name="internal" value="${t.internal ? "0" : "1"}"><button type="submit" class="btn sm">${t.internal ? "Count as outside" : "Mark internal"}</button></form>`;
   const tenants = `<section class="panel flush scroll">
     <table>
       <thead><tr><th>team</th><th>created</th><th class="r">members</th><th class="r">live packets</th><th class="r">reads 7d</th><th>last seen</th><th></th></tr></thead>
       <tbody>${
         d.tenants.length
           ? d.tenants
-              .map((t) => `<tr><td><strong>${esc(t.slug)}</strong>${t.name !== t.slug ? ` <span class="muted">${esc(t.name)}</span>` : ""}</td><td class="nowrap">${when(t.created_at, now)}</td><td class="r">${num(t.members)}</td><td class="r">${num(t.packets_live)}</td><td class="r">${num(t.reads_7d)}</td><td class="nowrap">${when(t.last_seen, now)}</td><td class="r"><a class="u small" href="/console/tenants/${esc(t.slug)}/delete">Delete team…</a></td></tr>`)
+              .map(
+                (t) =>
+                  `<tr><td><strong>${esc(t.slug)}</strong>${t.name !== t.slug ? ` <span class="muted">${esc(t.name)}</span>` : ""}${t.internal ? ` <span class="small muted">· internal</span>` : ""}</td><td class="nowrap">${when(t.created_at, now)}</td><td class="r">${num(t.members)}</td><td class="r">${num(t.packets_live)}</td><td class="r">${num(t.reads_7d)}</td><td class="nowrap">${when(t.last_seen, now)}</td><td class="r nowrap">${toggle(t)} <a class="u small" href="/console/tenants/${esc(t.slug)}/delete">Delete team…</a></td></tr>`,
+              )
               .join("")
           : `<tr><td colspan="7" class="muted">No teams yet. They sign up at <a href="/join">/join</a>.</td></tr>`
       }</tbody>
     </table>
   </section>`;
-  const list = (rows: Array<{ k: string; n: number }>, empty: string) =>
-    rows.length ? rows.map((r) => `<div class="small" style="display:flex;justify-content:space-between"><span class="mono">${esc(r.k)}</span><span>${num(r.n)}</span></div>`).join("") : `<div class="small muted">${empty}</div>`;
   const side = `<section class="grid2">
     <div class="panel"><div class="t">Private instances by version, 28 days</div>${list(d.instances.byVersion.map((r) => ({ k: r.version, n: r.n })), "No update check received yet.")}
       <div class="t" style="margin-top:12px">By members</div>${list(d.instances.byMembers.map((r) => ({ k: r.members, n: r.n })), "—")}</div>
-    <div class="panel"><div class="t">Assistants seen, 28 days</div>${list(d.assistants.map((r) => ({ k: r.name, n: r.n })), "No assistant has connected yet.")}<div class="small muted" style="margin-top:8px">distinct identities per assistant name announced at connect</div></div>
+    <div class="panel"><div class="t">Assistants seen, 28 days</div>${list(d.assistants.map((r) => ({ k: r.name, n: r.n })), "No assistant has connected yet.")}<div class="small muted" style="margin-top:8px">distinct outside identities per assistant name announced at connect</div></div>
   </section>`;
-  return shell("tenants", v, "Tenants", `${head("Control center", "every team on this deployment, the users KPI, private instances that check in, Deploy clicks")}
+  const halves = (a: Html, b: Html) => `<section class="grid2 even">${a}${b}</section>`;
+  return shell("tenants", v, "Tenants", `${head("Control center", "counts cover outside teams · mark your own and test teams internal in the table below")}
 ${flash(note)}
 ${tiles}
-${strip}
+${halves(funnel, sources)}
+${halves(strip, pages)}
+${weeks}
 ${tenants}
 ${side}`);
 }

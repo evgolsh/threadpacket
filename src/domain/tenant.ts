@@ -38,3 +38,10 @@ export function tenantWhere(col: string, tenant: string): { sql: string; binds: 
 /** Tenant slugs: 3 to 32 of [a-z0-9-], excluding site paths and reserved names. */
 export const RESERVED_TENANTS = new Set(["team", "all", "admin", "console", "api", "www", "threadpacket", "handoff", "packets", "assets", "login", "logout", "switch", "invite", "join", "stats", "connect", "mcp", "oauth", "authorize", "deploy", "v1", "evg"]);
 export const isValidTenant = (slug: string): boolean => /^[a-z0-9][a-z0-9-]{1,30}[a-z0-9]$/.test(slug) && !RESERVED_TENANTS.has(slug);
+
+/**
+ * SQL for "this identity belongs to an outside team": a team the operator has not marked internal. Accounts
+ * without a team (the operator's own) are not outside. The fragment takes no bind values.
+ */
+export const outsideWhere = (col: string): string =>
+  `(instr(${col}, '/') > 0 AND substr(${col}, 1, instr(${col}, '/') - 1) NOT IN (SELECT slug FROM tenants WHERE internal = 1))`;

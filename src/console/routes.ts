@@ -180,7 +180,12 @@ export function consoleRoutes(): Hono<{ Bindings: Env; Variables: ConsoleVariabl
     const v = vw(c);
     if (!v.control || v.tenant !== "") return redirect("/console/overview");
     const team = c.req.query("team") ?? "";
-    const note = c.req.query("did") === "deleted" && isValidTenant(team) ? `Deleted team ${team}. Its members were signed out, and its packets and files are deleted within 7 days.` : null;
+    const notes: Record<string, string> = {
+      deleted: `Deleted team ${team}. Its members were signed out, and its packets and files are deleted within 7 days.`,
+      internal: `Team ${team} is internal: it is left out of the outside counts and /stats.`,
+      outside: `Team ${team} counts as an outside team again.`,
+    };
+    const note = isValidTenant(team) ? notes[c.req.query("did") ?? ""] ?? null : null;
     return html(tenantsPage(v, await controlCenter(c.env.DB), note));
   });
 
@@ -212,6 +217,17 @@ export function consoleRoutes(): Hono<{ Bindings: Env; Variables: ConsoleVariabl
     await deleteTeam(db, team);
     await recordEvent(db, { kind: "console", name: "delete_team", subject: c.get("session").handle, outcome: "ok", detail: { team } });
     return redirect(`/console/tenants?did=deleted&team=${encodeURIComponent(team)}`);
+  });
+
+  // The operator marks a team internal (left out of the outside counts and /stats), or counts it again.
+  app.post("/console/tenants/:team/internal", async (c) => {
+    const db = c.env.DB;
+    const team = await existingTeam(db, c.req.param("team"));
+    if (!team) return notFound();
+    const internal = c.get("form").internal === "1";
+    await db.prepare("UPDATE tenants SET internal = ? WHERE slug = ?").bind(internal ? 1 : 0, team).run();
+    await recordEvent(db, { kind: "console", name: internal ? "team_internal" : "team_outside", subject: c.get("session").handle, outcome: "ok", detail: { team } });
+    return redirect(`/console/tenants?did=${internal ? "internal" : "outside"}&team=${encodeURIComponent(team)}`);
   });
 
   // ---- members ----

@@ -35,6 +35,7 @@ import { inviteRoutes } from "./http/invite";
 import { mcpCallsIn, recordMcpCalls } from "./store/telemetry";
 import { base64url } from "./domain/ids";
 import { recordEvent } from "./store/events";
+import { countPageView, pageViewOf } from "./store/pageviews";
 import { receiveUpdateCheck } from "./update-check";
 import { DEPLOY_PATH, DEPLOY_URL } from "./http/header";
 import { handleJoin, joinHeaders, joinPage } from "./http/join";
@@ -78,6 +79,21 @@ export function createApp(): Hono<{ Bindings: Env; Variables: Variables }> {
     c.set("service", service);
     c.set("cfg", service.cfg);
     await next();
+  });
+
+  // The control center counts its public pages per day (src/store/pageviews.ts), after the page is sent.
+  app.use("*", async (c, next) => {
+    await next();
+    const cfg = c.get("cfg");
+    if (cfg.mode !== "control") return;
+    const view = pageViewOf(c.req.raw, c.res, new URL(cfg.publicUrl).hostname);
+    if (!view) return;
+    const counting = countPageView(c.env.DB, view);
+    try {
+      c.executionCtx.waitUntil(counting);
+    } catch {
+      await counting;
+    }
   });
 
   app.onError((err, c) => {

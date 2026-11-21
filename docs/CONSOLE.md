@@ -36,6 +36,7 @@ Layout: public and sign-in pages share one header and one width (`--gutter`, at 
 - **Members**: each member with a liveness dot (seen within an hour, within 7 days, longer ago, never), last seen, last sign-in, assistants signed in now, calls over 7 days, and live packets sent and addressed to them. Add a member, reset a code, remove a member.
 - **Assistants**: each assistant signed in as each member: the name it gave when it registered, the name and version it announced at MCP initialize, the host its sign-in returns to (`127.0.0.1` or `localhost` = an app on that computer), first and last seen, calls, connected or signed out. Disconnect one assistant. Lists refused tokens by reason, wrong sign-in codes by username, and registrations never used.
 - **Ops**: deployment (version, address, issuer, signing key, limits), database counts and applied migrations, files in storage by state, cleanup runs with a **Run cleanup now** button, recent problems (tool errors, refused tokens, wrong codes, failed cleanups), and the console's own record of who did what.
+- **Tenants** (the operator on the control center): users (outside identities that read a packet) over 7 and 28 days, page views, teams, round trips, private instances and Deploy clicks; the sign-up funnel over 28 days (homepage views, `/join` views, then the outside teams created and how many connected an assistant, sent a packet and had a packet read); where visits came from and their countries; sends and reads and page views per day over 14 days, and views per page; a week-by-week table; every team with **Mark internal** and **Delete team**; private instances by version and size; assistants seen. Activity counts and `/stats` cover outside teams only: teams the operator has not marked internal. Accounts without a team are never counted.
 
 There is no packet viewer in `/console`: the admin console never shows a title, a brief, a file name, a code or a token. A new access code is the one exception: it is shown once, on the page right after Add or Reset.
 
@@ -47,8 +48,9 @@ There is no packet viewer in `/console`: the admin console never shows a title, 
 - **Delete team** (team admins on the control center, at the bottom of Your team): asks first, then removes every member of the team with their sessions, invitations and admin grants, signs out all their assistants, revokes every live packet the team sent or received, claims its unsent files for the next cleanup, and frees the team name. Revoked packets and their files are deleted by the cleanup within 7 days. This is how a team is deleted: the operator does not delete teams on request or recover lost access codes.
 - **Disconnect** (Assistants): signs out one assistant of one member at once. Signing in again works.
 - **Run cleanup now**: the hourly cleanup, run immediately.
+- **Mark internal / Count as outside** (Tenants): leaves a team out of the outside counts and `/stats`, or counts it again. Daily totals already kept for days older than 3 days stay as they were.
 
-Each action asks first on a page of its own, except Add and Run cleanup.
+Each action asks first on a page of its own, except Add, Run cleanup and Mark internal.
 
 ## How it is kept safe
 
@@ -61,9 +63,13 @@ Each action asks first on a page of its own, except Add and Run cleanup.
 
 The `events` table records, per request: tool calls (tool name, member, client, outcome code, time taken), MCP initialize (the client's announced name and version), refused tokens (the reason), sign-ins at `/authorize` (ok or wrong code), token grants, cleanup runs, web logins, Packets actions, and console actions. No arguments, titles, briefs, file names, codes or tokens. Events from requests without a valid token (refused tokens, wrong codes) are capped at 60 per minute per Worker isolate, so a flood cannot fill the table. Events are kept 30 days.
 
+On the control center, `page_views` counts the public pages (`/`, `/use-cases`, `/join`, `/connect`, `/login`, `/privacy`, `/terms`, `/contact`, `/about`, `/stats`) per day, page, source and country (`src/store/pageviews.ts`). There is no row per visit, and no cookie, IP address or user agent is stored. A view is counted only when a browser navigates to the page (`Sec-Fetch-Mode: navigate`, `Sec-Fetch-Dest: document`), not a prefetch and not a known crawler or script, and the page answered 200 with HTML. The source is the `ref` or `utm_source` tag in the link (`/?ref=hn`), else the referring site's host, `self` for this site, or empty. Counting is capped at 600 views per minute per Worker isolate. Page views are kept 400 days.
+
+`daily_totals` keeps, per day, the outside teams created, packets sent, packets read, and users over the 7 days to that day (`src/store/totals.ts`). The hourly cleanup recomputes the last 3 days from `events` and fills any missing day of the last 30, so the history outlives the 30 days of events. The totals hold no usernames and are kept.
+
 `access_revocations` holds the revocations of the last 9 hours: an access token for that member and client issued at or before the revocation is refused (`src/auth/verify.ts`). Access tokens live 8 hours, so older rows do nothing and cleanup removes them.
 
-Cleanup (hourly, and from Ops) removes expired sign-in codes, refresh tokens that expired or were revoked more than 7 days ago, client registrations that never got a token within 7 days, ended console sessions and login limits.
+Cleanup (hourly, and from Ops) removes expired sign-in codes, refresh tokens that expired or were revoked more than 7 days ago, client registrations that never got a token within 7 days, ended console sessions and login limits, and page views older than 400 days. On the control center it then writes the daily totals.
 
 ## Local run
 

@@ -112,13 +112,16 @@ export interface RecordsPruned {
   sessions: number;
   /** Update checks from instances not heard from in 90 days (the hosted instance only). */
   instances: number;
+  /** Days of page views older than 400 days (the hosted instance only). */
+  page_views: number;
 }
 
 /**
  * Removes records that no longer do anything: events older than 30 days, expired sign-in codes, refresh tokens
  * that expired or were revoked more than 7 days ago, client registrations never used in 7 days, revocations
- * older than any access token (9 hours), ended browser sessions and login limits, and (where the update
- * check receiver is on) instances not heard from in 90 days. Invitation links go when they expire, or a day after use.
+ * older than any access token (9 hours), ended browser sessions and login limits, page views older than 400
+ * days, and (where the update check receiver is on) instances not heard from in 90 days. Invitation links go
+ * when they expire, or a day after use.
  */
 export async function pruneRecords(db: D1Database, now: Date = new Date()): Promise<RecordsPruned> {
   const ago = (ms: number) => new Date(now.getTime() - ms).toISOString();
@@ -139,8 +142,9 @@ export async function pruneRecords(db: D1Database, now: Date = new Date()): Prom
     db.prepare("DELETE FROM admin_login_limits WHERE expires_at <= ?").bind(at),
     db.prepare("DELETE FROM member_sessions WHERE expires_at <= ?").bind(at),
     db.prepare("DELETE FROM invites WHERE expires_at <= ? OR used_at < ?").bind(at, ago(day)),
+    db.prepare("DELETE FROM page_views WHERE day < ?").bind(ago(400 * day).slice(0, 10)),
   ]);
   const n = (i: number) => r[i]?.meta.changes ?? 0;
   const instances = await pruneInstances(db, now);
-  return { events: n(0), oauth_codes: n(1), refresh_tokens: n(2), unused_clients: n(3), revocations: n(4), sessions: n(5) + n(6), instances };
+  return { events: n(0), oauth_codes: n(1), refresh_tokens: n(2), unused_clients: n(3), revocations: n(4), sessions: n(5) + n(6), instances, page_views: n(8) };
 }
