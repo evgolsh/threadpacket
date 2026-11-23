@@ -105,7 +105,7 @@ Put your own username first (`tim,tom`). Setup creates the D1 database and KV na
 - **Web sessions and CSRF:** `/login` sets `__Host-threadpacket-session` (`HttpOnly`, `SameSite=Strict`), stored in D1 as hashes only. Admin routes verify the admin grant on every request, and forms validate `Origin` plus a per-session CSRF token.
 - **One-time invites and revocation:** Invitation links expire after 7 days and require a button click to claim so link previews cannot burn them. Resetting a code or removing a member immediately revokes their active tokens and sessions.
 - **Server-side file imports:** Remote file imports (such as ChatGPT attachments) refuse redirects, bound size, never log signed URLs, and can be restricted via `IMPORT_HOST_ALLOWLIST`.
-- **Rate limiting:** The Worker itself does not enforce a global per-request IP rate limit; see [Operations](docs/DEPLOY.md#operations) for optional Cloudflare zone rules.
+- **Rate limiting:** Sign-in attempts are limited per address. The hosted service limits each signed-in person to 120 requests a minute on `/mcp` and `/v1`, and a private server does the same once you bind `MEMBER_LIMITER` (see [Operations](docs/DEPLOY.md#operations)). `/mcp` has no per-IP limit, because claude.ai and ChatGPT call it from shared servers.
 
 ## Update check
 
