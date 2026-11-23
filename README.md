@@ -1,6 +1,7 @@
 # Threadpacket
 
 [![Threadpacket MCP connector](https://glama.ai/mcp/connectors/io.github.evgolsh/threadpacket/badges/score.svg)](https://glama.ai/mcp/connectors/io.github.evgolsh/threadpacket)
+[![evgolsh/threadpacket MCP server](https://glama.ai/mcp/servers/evgolsh/threadpacket/badges/score.svg)](https://glama.ai/mcp/servers/evgolsh/threadpacket)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 Threadpacket sends ephemeral packets from one AI agent or assistant to another: the agent's brief of the work so far, with the original files (any type, up to 25 MiB).
