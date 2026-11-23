@@ -9,6 +9,7 @@ import claudePlugin from "../plugin/.claude-plugin/plugin.json";
 import codexPlugin from "../plugin/.codex-plugin/plugin.json";
 import claudeMcp from "../plugin/.mcp.json";
 import agentMcp from "../plugin/mcp.json";
+import cursorLogo from "../plugin/assets/icon.svg?raw";
 
 /**
  * The plugin package and the registry entry. Codex caches an installed plugin by version, and the directories
@@ -55,6 +56,13 @@ describe("plugin manifests", () => {
     expect(cases.positive).toHaveLength(5);
     expect(cases.negative).toHaveLength(3);
     for (const c of cases.positive) expect(c.tools_triggered && c.expected_behavior && c.prompt).toBeTruthy();
+  });
+
+  it("the Cursor manifest points inside the repository, with a square logo", () => {
+    // Cursor resolves relative paths against the repository root and turns the logo into a raw.githubusercontent.com URL.
+    for (const path of [cursor.logo, cursor.skills, cursor.mcpServers]) expect(path).not.toMatch(/^(\/|\.\.|[a-z]+:)/);
+    expect(cursor.logo).toBe("plugin/assets/icon.svg");
+    expect(cursorLogo).toMatch(/viewBox="0 0 (\d+) \1"/);
   });
 
   it("each host gets the transport type it accepts, on the same server", () => {

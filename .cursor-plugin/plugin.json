@@ -9,6 +9,7 @@
   "homepage": "https://threadpacket.com",
   "repository": "https://github.com/evgolsh/threadpacket",
   "keywords": ["threadpacket", "handoff", "mcp", "file-sharing", "family", "teams", "context"],
+  "logo": "plugin/assets/icon.svg",
   "skills": "./plugin/skills/",
   "mcpServers": "./mcp.json"
 }
