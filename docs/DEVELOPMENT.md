@@ -71,7 +71,8 @@ To check one moment without rendering the whole video, `npm run video -- --still
 | `plugin.json`, `mcp.json` (`type: streamable-http`) | ChatGPT and Codex (Agent Plugins format). |
 | `.claude-plugin/plugin.json`, `.mcp.json` (`type: http`) | Claude Code and Claude desktop/web apps. |
 | `.codex-plugin/plugin.json` | Legacy Codex CLI compatibility. |
-| `skills/threadpacket/SKILL.md`, `assets/`, `LICENSE` | Shared skill instructions, icons (`assets/icon.png`, 512 px), and licence. |
+| `.cursor-plugin/plugin.json` (repository root), root `mcp.json` | Cursor Marketplace. The logo is `plugin/assets/icon.svg`. Skills are `plugin/skills`. The server is `https://threadpacket.com/mcp`. |
+| `skills/threadpacket/SKILL.md`, `assets/`, `LICENSE` | Shared skill instructions, icons (`assets/icon.svg`, `assets/icon.png` at 512 px), and licence. |
 
 Checks:
 

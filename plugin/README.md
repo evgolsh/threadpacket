@@ -1,10 +1,12 @@
 # Threadpacket
 
-Threadpacket sends ephemeral packets from one AI agent or assistant to another: the agent's brief of the work so far, with the original files. Say "send a packet to anna" and your assistant writes a brief (purpose, decisions and their reasons, constraints, next step, references, open questions), attaches the files you choose, and sends it to anna's Threadpacket inbox. In her own assistant (Claude, ChatGPT, Codex, Claude Code or Hermes) she says "continue the packet from joe" and carries on with the original files.
+Send your work to someone else's AI assistant, with your notes and the original files. Say "send a packet to anna" and your assistant writes a brief (purpose, decisions and their reasons, constraints, next step, references, open questions), attaches the files you choose, and sends it to anna's Threadpacket inbox. In her own assistant (Claude, ChatGPT, Cursor, Codex, Claude Code or Hermes) she says "continue the packet from joe" and carries on with the original files.
 
 This plugin adds the Threadpacket skill, which tells the assistant how to write a brief and pick up a packet, and connects the Threadpacket server at `https://threadpacket.com/mcp`.
 
 ## Install
+
+Cursor: after the plugin is on the Marketplace, open **Customize**, find **Threadpacket**, and install it. It connects to `https://threadpacket.com/mcp` and adds the skill that writes the brief. Sign in with your username and access code when the first tool call opens the browser. To try a local build, copy this repository to `~/.cursor/plugins/local/threadpacket` (a real directory, not a symlink to the clone) and run **Developer: Reload Window**. See the [Cursor section of the README](../README.md#cursor).
 
 Claude Code 2.1.275 or later:
 
@@ -63,4 +65,4 @@ A Threadpacket team. Create one at [threadpacket.com/join](https://threadpacket.
 
 ## Your own server
 
-Threadpacket is open source. If your team runs its own Threadpacket server, change the URL in `.mcp.json` (Claude Code) and `mcp.json` (ChatGPT, Codex) to your server's `/mcp` address before you install. In Hermes, use that address as the `url` of the `config.yaml` entry above.
+Threadpacket is open source. If your team runs its own Threadpacket server, change the URL in `.mcp.json` (Claude Code) and `mcp.json` (ChatGPT, Codex) to your server's `/mcp` address before you install. In Hermes, use that address as the `url` of the `config.yaml` entry above. The Cursor Marketplace plugin stays on `https://threadpacket.com/mcp`. For a private server in Cursor, add that server's `/mcp` address as your own MCP server.

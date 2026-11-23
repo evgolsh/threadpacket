@@ -6,19 +6,29 @@ A packet is your notes and the original files. Joe sorts out the car insurance r
 
 - **Your notes and the files.** The brief says what you decided and what is left to do. Files of any type (PDFs, Word, Excel, images, ZIPs) go with it, byte for byte. Open a packet in Packets to read the brief and preview or download the files.
 - **You see that it arrived.** Packets shows when Anna picked it up and in which assistant, and your assistant can tell you the same.
-- **Their own assistant.** Anna can use ChatGPT while Joe uses Claude. Codex, Claude Code and Hermes work too. Each person signs in with their own username.
+- **Their own assistant.** Anna can use ChatGPT while Joe uses Claude. Cursor, Codex, Claude Code and Hermes work too. Each person signs in with their own username.
 - **Storage, not AI.** Threadpacket keeps the brief and files and deletes them when they expire. It makes no model calls and needs no API keys.
 
 Free at [threadpacket.com](https://threadpacket.com), or open source on your own Cloudflare account for a small team that wants its files on its own infrastructure. MIT licensed. [Watch the 29-second demo](https://threadpacket.com/demo/threadpacket-demo.mp4).
 
 ## Get started
 
-1. **Add Threadpacket to your assistant.** The server address is `https://threadpacket.com/mcp`. In Claude, [this link](https://claude.ai/customize/connectors?modal=add-custom-connector&connectorName=Threadpacket&connectorUrl=https%3A%2F%2Fthreadpacket.com%2Fmcp) opens the custom connector form with it filled in. For ChatGPT, Codex, Claude Code and Hermes, see [Assistant setup](https://threadpacket.com/connect). Claude Code, the Codex CLI and Hermes can [install the plugin](plugin/README.md#install), which adds the skill that writes the brief.
+1. **Add Threadpacket to your assistant.** The server address is `https://threadpacket.com/mcp`. In Claude, [this link](https://claude.ai/customize/connectors?modal=add-custom-connector&connectorName=Threadpacket&connectorUrl=https%3A%2F%2Fthreadpacket.com%2Fmcp) opens the custom connector form with it filled in. For Cursor, see [Cursor](#cursor). For ChatGPT, Codex, Claude Code and Hermes, see [Assistant setup](https://threadpacket.com/connect). Claude Code, the Codex CLI and Hermes can [install the plugin](plugin/README.md#install), which adds the skill that writes the brief.
 2. **Create a team.** On the Threadpacket sign-in page that opens, choose **Create a team** and pick your username, and a team name if you like (without one, the team is named after you). You are its admin. Save the access code it shows once: your username and access code sign you in on any computer and in any assistant.
 3. **Invite your partner.** Ask your assistant "invite anna to Threadpacket" and send her the link it gives you. She opens it, gets her own access code and connects her assistant.
 4. **Send a packet.** "Send a packet to anna with the two PDFs." She says "Continue the packet from joe."
 
 The hosted service is free: up to 10 people per team, files up to 25 MiB and 256 MiB per team at a time, packets deleted after 7 days by default (30 at most). See [Privacy](https://threadpacket.com/privacy). Assistants can read the whole setup at [llms.txt](https://threadpacket.com/llms.txt).
+
+## Cursor
+
+The Cursor plugin connects Cursor to `https://threadpacket.com/mcp` and adds the skill that writes the brief. After it is listed on the Marketplace, open **Customize**, find **Threadpacket**, and install it. The first tool call opens a browser page. Sign in with your username and access code.
+
+Say "Send a packet to anna", "Continue the packet from joe", or "Invite anna to Threadpacket".
+
+To try this repository before it is listed, copy the clone to `~/.cursor/plugins/local/threadpacket`. The copy has to be a real directory inside that folder. Cursor skips a symlink that points at a checkout somewhere else. Then run **Developer: Reload Window**. Customize should show the Threadpacket skill and an MCP server at `https://threadpacket.com/mcp`. On an Enterprise account, an admin turns on local plugin imports under Dashboard, Settings, Security & Identity, Marketplace and Plugins.
+
+The installed plugin always uses the hosted service. Its MCP config is read-only. For a private server, add that server's `/mcp` address as your own MCP server in Cursor settings.
 
 ## Your own private server
 
