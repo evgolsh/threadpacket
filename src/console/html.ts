@@ -41,8 +41,8 @@ label.lbl{font-size:12.5px;font-weight:500;color:var(--muted);display:block;marg
 .dot.stale{background:transparent;border:2px solid var(--warn)}
 
 :root{--gutter:clamp(20px,4.5vw,80px)}
-.shell{min-height:100vh;display:flex;flex-wrap:wrap}
-nav.side{width:228px;flex:0 1 228px;background:var(--panel);border-right:1px solid var(--line);padding:18px 12px;display:flex;flex-direction:column;gap:3px;position:sticky;top:0;align-self:flex-start;height:100vh;height:100dvh;overflow-y:auto}
+.shell{min-height:100vh;display:flex}
+nav.side{width:228px;flex:0 0 228px;background:var(--panel);border-right:1px solid var(--line);padding:18px 12px;display:flex;flex-direction:column;gap:3px;position:sticky;top:0;align-self:flex-start;height:100vh;height:100dvh;overflow-y:auto}
 nav.side a.brand{display:flex;padding:4px 10px 18px 10px;font-size:16px;letter-spacing:-.03em}nav.side a.brand:hover{color:var(--ink)}
 nav.side a:not(.brand){display:block;padding:8px 11px;border-radius:6px;color:var(--muted);font-weight:500;border:1px solid transparent}
 nav.side a:not(.brand):hover{color:var(--ink);background:var(--ground)}
@@ -73,7 +73,7 @@ nav.side .account-menu hr{border:0;border-top:1px solid var(--line-soft);margin:
 nav.side .nav-separator{height:1px;background:var(--line-soft);margin:10px 8px}
 @media (max-width:760px){
   /* A phone: the menu is a short bar above the page. The brand and who is signed in, then the links. */
-  .shell{align-content:flex-start}
+  .shell{flex-wrap:wrap;align-content:flex-start}
   nav.side{flex:1 1 100%;width:auto;flex-direction:row;flex-wrap:wrap;align-items:center;gap:3px 4px;border-right:0;border-bottom:1px solid var(--line);padding:10px 12px;position:static;height:auto;overflow:visible}
   nav.side > a:not(.brand){order:3;padding:7px 10px;font-size:13px}
   nav.side > a.on,nav.side > a.on:hover{box-shadow:none;border-color:var(--accent)}
