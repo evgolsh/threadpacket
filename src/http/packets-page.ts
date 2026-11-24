@@ -109,6 +109,7 @@ a.entry-name:hover{color:var(--accent);text-decoration:underline;text-underline-
 .back{display:inline-flex;align-items:center;gap:4px;font-size:13px;font-weight:500;color:var(--muted);text-decoration:none;align-self:flex-start}
 .back svg{width:15px;height:15px}.back:hover{color:var(--ink)}
 .brief{padding:22px 26px;gap:0}
+.brief-foot{display:flex;align-items:center;justify-content:space-between;gap:10px 16px;flex-wrap:wrap;padding:12px 26px;border-top:1px solid var(--line-soft);font-size:12.5px;color:var(--muted)}
 .md{font-size:15px;line-height:1.68;overflow-wrap:anywhere;max-width:74ch}
 .md>:first-child{margin-top:0}.md>:last-child{margin-bottom:0}
 .md p{margin:0 0 12px}.md ul,.md ol{margin:0 0 12px;padding-left:22px}.md li{margin:4px 0}
@@ -144,6 +145,7 @@ a.entry-name:hover{color:var(--accent);text-decoration:underline;text-underline-
   .btn.lg{min-height:44px}
   .packets-upload .field{font-size:16px}
   .brief,.status-panel{padding:16px}
+  .brief-foot{padding:12px 16px}
   /* Phones show no PDF inside a page (Android shows nothing; iPhone one page). Opening it uses the phone's own viewer. */
   .preview-body.pdf iframe{display:none}
   .pdf-tap{display:flex;align-items:center;gap:12px;padding:18px 16px;color:var(--ink);text-decoration:none;min-height:64px}
@@ -244,7 +246,7 @@ function direction(me: string, h: { from: string; to: string; sent_via?: string 
 
 const uploadedBy = (f: UnsentFile): string => (f.via === "browser" ? "in the browser" : "by your assistant");
 
-const packetHref = (packetId: string): string => `/packets/${encodeURIComponent(packetId)}`;
+export const packetHref = (packetId: string): string => `/packets/${encodeURIComponent(packetId)}`;
 const fileHref = (attachmentId: string): string => `/packets/file/${encodeURIComponent(attachmentId)}`;
 
 /** A sentence to say to your assistant, with a button that copies it. */
@@ -539,6 +541,10 @@ function timeline(me: string, h: PacketView, d: Delivery & { sent_via: string | 
 
 const revokeHref = (packetId: string): string => `${packetHref(packetId)}/revoke`;
 
+/** The brief as plain text to paste into any chat: its title, who sent it, the brief, and the files' names. */
+const briefText = (h: PacketView, files: FileCard[]): string =>
+  `${h.title}\nA Threadpacket packet from ${h.from}.\n\n${h.brief.trim()}${files.length ? `\n\nFiles: ${files.map((f) => f.filename).join(", ")}` : ""}`;
+
 export function packetPage(v: PacketsViewer, h: PacketView, d: Delivery & { sent_via: string | null }, brief: Html, files: FileCard[], now: number, nonce: string): Html {
   const count = files.length ? plural(files.length, "file") : "Brief only";
   const sender = h.from === v.handle;
@@ -568,6 +574,7 @@ export function packetPage(v: PacketsViewer, h: PacketView, d: Delivery & { sent
   <section class="panel flush" aria-label="Brief">
     <div class="stamp-bar"><span>Packet // ${esc(direction(v.handle, { ...h, sent_via: null }))}</span><span>${esc(count)} · ${byWho}</span></div>
     <div class="brief"><div class="md">${brief}</div></div>
+    ${sender ? "" : `<div class="brief-foot"><span>No assistant connected? Paste the brief into any chat${files.length ? " and attach the files below" : ""}.</span><button type="button" class="btn sm" data-copy="${esc(briefText(h, files))}">Copy brief</button></div>`}
   </section>
   ${files.length ? `<h2 class="files-h">Files · ${files.length}</h2>${files.map(fileCard).join("")}` : ""}`,
     nonce,

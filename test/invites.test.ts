@@ -54,7 +54,11 @@ describe("threadpacket_invite", () => {
 
     const open = await fetchAs(ctl, url.pathname, { method: "POST" });
     expect(open.status).toBe(200);
+    // Sent without this site's Origin: the code is shown, but the browser is not signed in.
+    expect(open.headers.get("set-cookie")).toBeNull();
     const page = await open.text();
+    expect(page).toContain("Save your access code.");
+    expect(page).not.toContain("signed in as");
     const code = /tp-[A-Za-z0-9_-]{16}/.exec(page)?.[0];
     expect(code).toBeTruthy();
     expect(page).toContain("claude.ai/customize/connectors?modal=add-custom-connector");
@@ -66,6 +70,55 @@ describe("threadpacket_invite", () => {
     expect(again.status).toBe(410);
     expect(await again.text()).toContain("already used");
     expect(await (await fetchAs(ctl, url.pathname)).text()).toContain("already used");
+  });
+
+  it("opening the link signs the browser in and opens the packet already sent to them", async () => {
+    const team = `fam-${uid()}`;
+    await seedTeam(team, "joe");
+    const joe = await token(`${team}/joe`);
+    const inv = expectOk(await call(joe, "threadpacket_invite", { username: "anna" }));
+    const sent = expectOk(await call(joe, "threadpacket_send", { title: "Kitchen quote", brief: "Compare the two quotes.\n\nNext: pick one by Friday.", to: "anna", idempotency_key: crypto.randomUUID() }));
+    expectOk(await call(joe, "threadpacket_send", { title: "Team notes", brief: "For everyone.", to: "team", idempotency_key: crypto.randomUUID() }));
+    const packetId = sent.packet_id as string;
+
+    // The link's first page says a packet waits, without its title: messengers' link previews read this page.
+    const path = new URL(inv.invite_url as string).pathname;
+    const first = await (await fetchAs(ctl, path)).text();
+    expect(first).toContain("joe sent you a packet.");
+    expect(first).not.toContain("Kitchen quote");
+
+    const open = await fetchAs(ctl, path, { method: "POST", headers: { origin: ORIGIN } });
+    expect(open.status).toBe(200);
+    const cookie = open.headers.getSetCookie().find((c) => c.startsWith("__Host-threadpacket-session="))?.split(";")[0];
+    expect(cookie).toBeTruthy();
+    const page = await open.text();
+    expect(page).toContain("joe sent you a packet.");
+    expect(page).toContain(`href="/packets/${packetId}"`);
+    expect(page).toContain("Kitchen quote");
+    expect(page).not.toContain("Team notes");
+    expect(page).toContain("Open the packet");
+    expect(page).toContain(`signed in as anna`);
+    expect(page).toMatch(/tp-[A-Za-z0-9_-]{16}/);
+
+    // The same browser reads it with no assistant: the brief, and a copy of it for any chat. Joe sees it was opened.
+    const read = await fetchAs(ctl, `/packets/${packetId}`, { headers: { cookie: cookie! } });
+    expect(read.status).toBe(200);
+    const html = await read.text();
+    expect(html).toContain("Compare the two quotes.");
+    expect(html).toContain("Copy brief");
+    expect(html).toContain("Kitchen quote\nA Threadpacket packet from joe.\n\nCompare the two quotes.");
+    const pickup = await env.DB.prepare("SELECT via FROM packet_pickups WHERE packet_id = ? AND reader = ?").bind(packetId, `${team}/anna`).first();
+    expect(pickup).toEqual({ via: "browser" });
+  });
+
+  it("another site cannot sign a browser in with an invitation", async () => {
+    const team = `fam-${uid()}`;
+    await seedTeam(team, "joe");
+    const inv = expectOk(await call(await token(`${team}/joe`), "threadpacket_invite", { username: "anna" }));
+    const open = await fetchAs(ctl, new URL(inv.invite_url as string).pathname, { method: "POST", headers: { origin: "https://elsewhere.example" } });
+    expect(open.status).toBe(200);
+    expect(open.headers.get("set-cookie")).toBeNull();
+    expect(await env.DB.prepare("SELECT COUNT(*) AS n FROM member_sessions WHERE handle = ?").bind(`${team}/anna`).first()).toEqual({ n: 0 });
   });
 
   it("inviting again replaces the open link; an existing member gets a new code from it", async () => {

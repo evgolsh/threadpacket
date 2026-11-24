@@ -356,7 +356,7 @@ export function buildMcpServer(svc: ThreadpacketService, principal: Principal, d
       title: "Invite someone",
       description:
         "Add a person to the user's Threadpacket team and get an invitation link for them (the user's partner, family member or teammate), so packets can be sent to them. " +
-        "Give the link to the user to send on; it shows the invitee's access code once and how to connect their own assistant (Claude, ChatGPT and others). " +
+        "Give the link to the user to send on. Opening it signs the invitee in to Threadpacket in their browser, opens any packet already sent to them, and shows their access code once and how to connect their own assistant (Claude, ChatGPT and others). " +
         "Only a team admin can invite. Inviting an existing username makes a new link that gives them a new access code.",
       inputSchema: {
         username: z.string().min(1).max(63).describe("The invitee's username in the team, for example 'anna': 3 to 63 lowercase letters, digits, dots, underscores or hyphens."),
@@ -375,7 +375,7 @@ export function buildMcpServer(svc: ThreadpacketService, principal: Principal, d
         const inv = await createInvitation(db, cfg, principal.subject, args.username);
         const who = inv.new_member ? `Added ${inv.username}${inv.team ? ` to the team ${inv.team}` : ""}.` : `${inv.username} is already in the team; this link gives them a new access code.`;
         return {
-          content: [text(`${who} Invitation link (works once, until ${inv.expires_at}): ${inv.invite_url}\nSend it to ${inv.username} by message or email. It shows their access code and the steps to connect their assistant. Do not open it yourself. Then they say "continue the packet from ${handleOf(principal.subject)}".`)],
+          content: [text(`${who} Invitation link (works once, until ${inv.expires_at}): ${inv.invite_url}\nSend it to ${inv.username} by message or email. Opening it signs them in to Threadpacket in their browser and shows any packet already sent to them, their access code, and the steps to connect their assistant. Do not open it yourself. In their assistant they say "continue the packet from ${handleOf(principal.subject)}".`)],
           structuredContent: { ...inv },
         };
       } catch (e) {

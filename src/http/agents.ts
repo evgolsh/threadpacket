@@ -265,7 +265,7 @@ What you can and cannot do:
 
 ## Invite someone
 
-Call \`threadpacket_invite\` with the username the person should have (for example \`anna\`): 3 to 63 lowercase letters, digits, dots, underscores or hyphens. Only a team admin can invite; whoever created the team is its admin. The tool returns an invitation link valid for 7 days that works once. Give the link to the person you are helping and tell them to send it to the invitee by message or email. Do not open it yourself: opening it reveals the access code.
+Call \`threadpacket_invite\` with the username the person should have (for example \`anna\`): 3 to 63 lowercase letters, digits, dots, underscores or hyphens. Only a team admin can invite; whoever created the team is its admin. The tool returns an invitation link valid for 7 days that works once. Give the link to the person you are helping and tell them to send it to the invitee by message or email. Do not open it yourself: opening it reveals the access code and signs that browser in. A packet sent to them before they open the link is shown there, ready to read in their browser.
 
 ## Send ("send a packet" or "hand this off")
 
