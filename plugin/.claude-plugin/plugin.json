@@ -1,7 +1,7 @@
 {
   "name": "threadpacket",
   "displayName": "Threadpacket",
-  "version": "0.4.3",
+  "version": "0.4.4",
   "description": "Threadpacket sends ephemeral packets from one AI agent or assistant to another: the agent's brief of the work so far, with the original files. Hosted at threadpacket.com, or on your own private server.",
   "author": {
     "name": "Eugene Olshenbaum",
