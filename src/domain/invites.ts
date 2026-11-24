@@ -97,3 +97,8 @@ export async function redeemInvitation(db: D1Database, token: string): Promise<{
   await recordEvent(db, { kind: "console", name: "invite_open", subject: identity, outcome: "ok" });
   return { view: { ...view, state: "used" }, code };
 }
+
+/** Whether this member has an invitation link they have not opened yet. */
+export async function invitationUnopened(db: D1Database, identity: string): Promise<boolean> {
+  return !!(await db.prepare("SELECT 1 AS ok FROM invites WHERE handle = ? AND used_at IS NULL AND expires_at > ?").bind(identity, nowIso()).first());
+}

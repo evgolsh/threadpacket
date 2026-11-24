@@ -5,9 +5,9 @@ import type { Principal } from "../auth/verify";
 import { ThreadpacketError } from "../domain/errors";
 import { declaredUploadType, isInlineTextType, isUtf8Text } from "../domain/filetypes";
 import { base64 } from "../domain/ids";
-import { handleOf, shownRecipient } from "../domain/tenant";
+import { handleOf, qualify, shownRecipient, tenantOf } from "../domain/tenant";
 import type { AttachmentDescriptor, ThreadpacketService, HostFile, Pickup } from "../domain/service";
-import { createInvitation } from "../domain/invites";
+import { createInvitation, invitationUnopened } from "../domain/invites";
 import { VERSION } from "../version";
 
 export const SERVER_INSTRUCTIONS = `Threadpacket sends a packet from one AI assistant to another: a prepared brief with the original attachments, for the same person on another computer or assistant, or for a teammate or family member on the same Threadpacket server.
@@ -150,7 +150,12 @@ export function buildMcpServer(svc: ThreadpacketService, principal: Principal, d
         };
         const result = await svc.sendWithImports(principal, input, (args.files ?? []) as HostFile[], "openai", [...(args.attachment_names ?? [])]);
         const routing = result.from !== result.to ? ` (from ${result.from} to ${result.to})` : "";
-        const summary = `${result.replayed ? "Already sent earlier (same request). " : "Sent. "}packet_id ${result.packet_id}, "${result.title}"${routing}, expires ${result.expires_at}.\n${describeAttachments(result.attachments)}`;
+        // A recipient who has not opened their invitation yet reads this packet from that link.
+        const invited =
+          result.to !== result.from && result.to !== "team" && (await invitationUnopened(db, qualify(tenantOf(principal.subject), result.to)))
+            ? `\n${result.to} has not opened their invitation link yet. Opening it shows them this packet in their browser, so give the user that link to forward if they have not already (threadpacket_invite makes a new one if it was lost).`
+            : "";
+        const summary = `${result.replayed ? "Already sent earlier (same request). " : "Sent. "}packet_id ${result.packet_id}, "${result.title}"${routing}, expires ${result.expires_at}.\n${describeAttachments(result.attachments)}${invited}`;
         return { content: [text(summary)], structuredContent: { ...result } };
       } catch (e) {
         return errorResult(e);

@@ -93,10 +93,12 @@ describe("teammates", () => {
     const r = await teamCall(a, "threadpacket_send", { title, brief: "x", to: "carol", idempotency_key: crypto.randomUUID() });
     // The error names the teammates, so an assistant that guessed a name can pick the right one.
     const text = errorText(r);
-    expect(text).toContain('"carol" is not a teammate. Your teammates: ');
-    const listed = /Your teammates: ([^.]*)\./.exec(text)![1]!.split(", ");
+    expect(text).toContain('"carol" is not on the user\'s team. Teammates: ');
+    const listed = /Teammates: ([^.]*)\./.exec(text)![1]!.split(", ");
     expect(listed).toEqual(expect.arrayContaining(["bob", "mallory"]));
     expect(listed).not.toContain("alice");
+    // Someone new: the assistant asks the user before inviting them.
+    expect(text).toContain('If "carol" is someone new, ask the user whether to invite them. Only if they agree: call threadpacket_invite');
     const titles = (expectOk(await teamCall(a, "threadpacket_inbox")).packets as Array<{ title: string }>).map((p) => p.title);
     expect(titles).not.toContain(title);
   });

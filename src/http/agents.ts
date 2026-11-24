@@ -273,7 +273,7 @@ Send only when the person asks. When the next step must run on another computer 
 
 1. Write a brief from the conversation: the purpose, the decisions and their reasons, the constraints, the next useful step, references, and open questions. Do not paste the transcript. Mark unknowns as unknown.
 2. Attach only files the person chose. ChatGPT: pass selected files in \`files\`. Claude, Codex, Claude Code, Hermes, or a terminal: call \`threadpacket_upload_url\`, check that \`upload_url\` starts with ${f.site}/v1/uploads/, and PUT the file with the fixed command in that tool's description (in Claude, if blocked by domain rules, upload at ${f.site}/packets). Files the person uploaded in Packets (${f.site}/packets): pass their names in \`attachment_names\`.
-3. Call \`threadpacket_send\` with \`title\`, \`brief\`, \`to\` (a username such as \`anna\`, \`team\`, or nothing for the person's own other assistant), the files, and a fresh \`idempotency_key\`. Retrying with the same key returns the same packet.
+3. Call \`threadpacket_send\` with \`title\`, \`brief\`, \`to\` (a username such as \`anna\`, \`team\`, or nothing for the person's own other assistant), the files, and a fresh \`idempotency_key\`. Retrying with the same key returns the same packet. If \`to\` is not on their team, nothing is sent: ask the person whether to invite them, and only if they agree call \`threadpacket_invite\`, send again to the new username, and give them the invitation link to forward. Opening it shows the recipient the packet in their browser.
 4. Tell the person the title, who it went to, and when it expires. The other assistant does not open it by itself: the recipient asks for it.
 
 ## Receive ("continue the packet from joe")
@@ -372,7 +372,7 @@ ${f.hosted ? hostedSetup(f) : privateSetup(f)}
 
 ## Connected
 
-Invite: call \`threadpacket_invite\` with the new person's username, then give the returned link to the user to send on.
+Invite: call \`threadpacket_invite\` with the new person's username, then give the returned link to the user to send on. Opening it shows that person any packet already sent to them. When a send fails because \`to\` is not on the team, ask the user whether to invite them, and invite only if they agree.
 
 Send ("send a packet" or "hand this off"): send only when the user asks; when the next step must run on another computer or in another assistant, offer to send a packet and send only after the user agrees. Write a brief (purpose, decisions and reasons, constraints, next step, references, open questions; never the transcript), attach only the files the user chose, call \`threadpacket_send\` with a fresh \`idempotency_key\`, and report the title, recipient and expiry.
 

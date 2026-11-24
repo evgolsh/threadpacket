@@ -576,6 +576,19 @@ export interface FunnelData {
   read: number;
 }
 
+/**
+ * Invitations over 28 days: how many outside admins made, how many invitees opened their link, and of those, how
+ * many then read a packet in the browser and how many connected an assistant. browserOnly counts every outside
+ * person who opened a packet in the browser in 28 days and connected no assistant in the 30 days of records.
+ */
+export interface InviteData {
+  made: number;
+  opened: number;
+  readInBrowser: number;
+  connected: number;
+  browserOnly: number;
+}
+
 /** Page views of the public pages (src/store/pageviews.ts). */
 export interface WebData {
   views7d: number;
@@ -612,6 +625,7 @@ export interface ControlCenterData {
   days: Array<{ date: string; sends: number; reads: number }>;
   web: WebData;
   funnel: FunnelData;
+  invites: InviteData;
   weeks: WeekRow[];
 }
 
@@ -681,6 +695,30 @@ async function funnelData(db: D1Database, pages: WebData["pages"], now: number):
     sent: t?.sent ?? 0,
     read: t?.was_read ?? 0,
   };
+}
+
+async function inviteData(db: D1Database, now: number): Promise<InviteData> {
+  const since = isoAgo(now, 28 * DAY);
+  const opened = (alias: string) => `${alias}.kind = 'console' AND ${alias}.name = 'invite_open' AND ${alias}.outcome = 'ok' AND ${alias}.ts >= ? AND ${outsideWhere(`${alias}.subject`)}`;
+  const browserOpen = (alias: string) => `${alias}.kind = 'packets' AND ${alias}.name = 'open' AND ${alias}.outcome = 'ok'`;
+  const assistant = (alias: string) => `${alias}.kind IN ('initialize', 'token')`;
+  const r = await one<{ made: number; opened: number; read_in_browser: number; connected: number; browser_only: number }>(
+    db,
+    `SELECT (SELECT COUNT(*) FROM events e WHERE e.kind = 'console' AND e.name = 'invite' AND e.outcome IN ('ok', 'reinvite') AND e.ts >= ? AND ${outsideWhere("e.subject")}) AS made,
+            (SELECT COUNT(DISTINCT o.subject) FROM events o WHERE ${opened("o")}) AS opened,
+            (SELECT COUNT(DISTINCT o.subject) FROM events o WHERE ${opened("o")}
+               AND EXISTS (SELECT 1 FROM events p WHERE ${browserOpen("p")} AND p.subject = o.subject AND p.ts >= o.ts)) AS read_in_browser,
+            (SELECT COUNT(DISTINCT o.subject) FROM events o WHERE ${opened("o")}
+               AND EXISTS (SELECT 1 FROM events a WHERE ${assistant("a")} AND a.subject = o.subject AND a.ts >= o.ts)) AS connected,
+            (SELECT COUNT(DISTINCT p.subject) FROM events p WHERE ${browserOpen("p")} AND p.ts >= ? AND ${outsideWhere("p.subject")}
+               AND NOT EXISTS (SELECT 1 FROM events a WHERE ${assistant("a")} AND a.subject = p.subject)) AS browser_only`,
+    since,
+    since,
+    since,
+    since,
+    since,
+  );
+  return { made: r?.made ?? 0, opened: r?.opened ?? 0, readInBrowser: r?.read_in_browser ?? 0, connected: r?.connected ?? 0, browserOnly: r?.browser_only ?? 0 };
 }
 
 /** The last 12 weeks from the daily totals (src/store/totals.ts) and page views, from the first week with a count above 0. */
@@ -796,6 +834,7 @@ export async function controlCenter(db: D1Database, now = Date.now()): Promise<C
     days,
     web,
     funnel: await funnelData(db, web.pages, now),
+    invites: await inviteData(db, now),
     weeks: await weekRows(db, now),
   };
 }

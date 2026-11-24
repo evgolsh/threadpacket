@@ -80,7 +80,7 @@ describe("tenants are isolated by their qualified identities", () => {
 
   it("a handle that exists only in another tenant is not a teammate here, and the error lists only this tenant", async () => {
     const r = await call(await betaTom(), "threadpacket_send", { title: "t", brief: "b", to: "tim", idempotency_key: crypto.randomUUID() });
-    expect(errorText(r)).toContain('"tim" is not a teammate. Your teammates: ann.');
+    expect(errorText(r)).toContain('"tim" is not on the user\'s team. Teammates: ann.');
   });
 
   it("the send tool names only the caller's own tenant's teammates", async () => {

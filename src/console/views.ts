@@ -619,6 +619,18 @@ export function tenantsPage(v: Viewer, d: ControlCenterData, note: string | null
     <div class="small muted" style="padding:10px 14px">Views are page loads, not people. Team rows follow the outside teams created in these 28 days.</div>
   </div>`;
 
+  const iv = d.invites;
+  const invites = `<div class="panel flush">
+    <div class="t">Invitations, 28 days</div>
+    <table><thead><tr><th></th><th class="r">count</th><th></th><th class="r">share</th></tr></thead><tbody>
+      ${step("Invitations made", iv.made, null, iv.made)}
+      ${step("… opened by the invitee", iv.opened, iv.made, iv.made)}
+      ${step("… then read a packet in the browser", iv.readInBrowser, iv.opened, iv.made)}
+      ${step("… then connected an assistant", iv.connected, iv.opened, iv.made)}
+    </tbody></table>
+    <div class="small muted" style="padding:10px 14px">${plural(iv.browserOnly, "person", "people")} read a packet in the browser with no assistant connected. Opened is a share of invitations made; the last two rows are shares of invitations opened.</div>
+  </div>`;
+
   const sources = `<div class="panel">
     <div class="t">Where visits came from, 28 days</div>${list(
       d.web.sources.map((r) => ({ k: r.source || "direct or unknown", n: r.n })),
@@ -686,8 +698,9 @@ export function tenantsPage(v: Viewer, d: ControlCenterData, note: string | null
   return shell("tenants", v, "Tenants", `${head("Control center", "counts cover outside teams · mark your own and test teams internal in the table below")}
 ${flash(note)}
 ${tiles}
-${halves(funnel, sources)}
-${halves(strip, pages)}
+${halves(funnel, invites)}
+${strip}
+${halves(sources, pages)}
 ${weeks}
 ${tenants}
 ${side}`);

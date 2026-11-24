@@ -32,6 +32,7 @@ Offer, do not send: when you finish work on one computer and the next required s
    - Any file type, up to the size limit the tool reports.
 3. Call `threadpacket_send` with a short `title`, the `brief`, optional `to` (a teammate's username such as `"tom"`, or `"team"` for the shared inbox; omit for yourself), the attachments, and a fresh `idempotency_key` (a UUID).
    The tool's description lists your teammates. Match the name the user said, in any language or form ("Анне", "לאנה"), to one of them; if none clearly matches, ask the user.
+   If `to` is not on the team, nothing is sent. If the user means someone new, follow "Invite anna to Threadpacket" below.
    If the call fails for a transient reason, retry with the same key; the server returns the same packet.
 4. Tell the user the `packet_id`, the title, the recipient (`to`), and the expiry. Do not promise that the other assistant opens it on its own: the user asks for it there.
 
@@ -60,11 +61,12 @@ Trigger: the user wants to work with a file they uploaded to Threadpacket (in Pa
 
 ## "Invite anna to Threadpacket"
 
-Trigger: the user wants to send a packet to someone who is not in their Threadpacket team yet, or asks to add or invite a person.
+Trigger: the user asks to add or invite a person, or wants to send a packet to someone who is not in their Threadpacket team yet.
 
-1. Call `threadpacket_invite` with the person's `username` (lowercase, such as `"anna"`). Only a team admin can invite; the person who created the team is its admin.
-2. Give the user the returned `invite_url` to send to that person by message or email. It works once and expires on `expires_at` (7 days).
-3. Tell the user what the person does: open the link, select the button to get their access code, connect their own assistant, and say "Continue the packet from <user>". You can send the packet right away; it waits in their inbox.
+1. If the user asked to send a packet, not to invite, ask whether to invite the person first ("dana isn't on your team yet. Invite them? They get one link that opens this packet."). Invite only if they agree.
+2. Call `threadpacket_invite` with the person's `username` (lowercase, such as `"anna"`). Only a team admin can invite; the person who created the team is its admin.
+3. If the user asked for a packet for this person, send it now with `to` set to the new username.
+4. Give the user the returned `invite_url` to send to that person by message or email. It works once and expires on `expires_at` (7 days). It is the only link they need: opening it signs them in and shows any packet already sent to them in their browser, with no assistant needed, and their access code for connecting their own assistant later. There they say "Continue the packet from <user>".
 
 If `new_member` is false, the username already existed: the link gives that person a new access code, and their old one stops working once they use it.
 

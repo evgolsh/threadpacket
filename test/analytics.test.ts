@@ -193,6 +193,26 @@ describe("the funnel and the daily totals", () => {
     expect(c.web.days.at(-2)).toEqual({ date: "2031-03-11", views: 11 });
   });
 
+  it("follows invitations of outside teams to a packet read in the browser, and counts readers with no assistant", async () => {
+    const [ti, tin] = [`iv-${s}`, `ivi-${s}`];
+    await addTeam(ti, "2031-03-01T09:00:00.000Z");
+    await addTeam(tin, "2031-03-01T09:00:00.000Z", 1);
+    for (const who of ["ann", "bob", "cat"]) await addEvent("2031-03-02T09:00:00.000Z", "console", "invite", `${ti}/joe`, who === "cat" ? "reinvite" : "ok");
+    await addEvent("2031-03-02T09:00:00.000Z", "console", "invite", `${tin}/joe`);
+    // ann opens her link and reads in the browser, then connects Claude; bob opens his link and reads in the browser only.
+    await addEvent("2031-03-03T09:00:00.000Z", "console", "invite_open", `${ti}/ann`);
+    await addEvent("2031-03-03T09:01:00.000Z", "packets", "open", `${ti}/ann`);
+    await addEvent("2031-03-04T09:00:00.000Z", "initialize", "Claude", `${ti}/ann`);
+    await addEvent("2031-03-03T10:00:00.000Z", "console", "invite_open", `${ti}/bob`);
+    await addEvent("2031-03-03T10:01:00.000Z", "packets", "open", `${ti}/bob`);
+    await addEvent("2031-03-03T10:02:00.000Z", "packets", "open", `${ti}/bob`);
+    // An internal team's invitee is not counted.
+    await addEvent("2031-03-03T11:00:00.000Z", "console", "invite_open", `${tin}/dee`);
+    await addEvent("2031-03-03T11:01:00.000Z", "packets", "open", `${tin}/dee`);
+
+    expect((await controlCenter(env.DB, now)).invites).toEqual({ made: 3, opened: 2, readInBrowser: 2, connected: 1, browserOnly: 1 });
+  });
+
   it("keeps daily totals of outside activity, recomputing the last 3 days and filling missing ones", async () => {
     expect(await rollUpDailyTotals(env.DB, now)).toBe(30 * 3 + 24);
     const total = async (day: string, metric: string) => (await env.DB.prepare("SELECT n FROM daily_totals WHERE day = ? AND metric = ?").bind(day, metric).first<{ n: number }>())?.n ?? null;
@@ -216,7 +236,7 @@ describe("the funnel and the daily totals", () => {
   it("the Tenants page shows the funnel, the sources and the weeks", async () => {
     const op = await operator();
     const page = await op.page("/console/tenants");
-    for (const text of ["Sign-up funnel, 28 days", "Where visits came from, 28 days", "page views, 28 days", "By week", "Mark internal"]) expect(page).toContain(text);
+    for (const text of ["Sign-up funnel, 28 days", "Invitations, 28 days", "Where visits came from, 28 days", "page views, 28 days", "By week", "Mark internal"]) expect(page).toContain(text);
   });
 
   it("the hourly cleanup writes today's totals on the control center only", async () => {
