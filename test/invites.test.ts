@@ -81,6 +81,8 @@ describe("threadpacket_invite", () => {
     const sent = expectOk(sendRes);
     // Joe's assistant hears that the invitation link is what opens it.
     expect(sendRes.content[0]!.text).toContain("anna has not opened their invitation link yet. Opening it shows them this packet");
+    // It does not prompt a new invitation, which would replace the link joe already forwarded.
+    expect(sendRes.content[0]!.text).not.toContain("threadpacket_invite");
     expectOk(await call(joe, "threadpacket_send", { title: "Team notes", brief: "For everyone.", to: "team", idempotency_key: crypto.randomUUID() }));
     const packetId = sent.packet_id as string;
 
@@ -112,6 +114,11 @@ describe("threadpacket_invite", () => {
     expect(html).toContain("Kitchen quote\nA Threadpacket packet from joe.\n\nCompare the two quotes.");
     const pickup = await env.DB.prepare("SELECT via FROM packet_pickups WHERE packet_id = ? AND reader = ?").bind(packetId, `${team}/anna`).first();
     expect(pickup).toEqual({ via: "browser" });
+    // Tenants counts both: who was invited, and a packet opened by its recipient.
+    const invited = await env.DB.prepare("SELECT detail FROM events WHERE kind = 'console' AND name = 'invite' AND subject = ?").bind(`${team}/joe`).first<{ detail: string }>();
+    expect(JSON.parse(invited!.detail)).toEqual({ invitee: `${team}/anna` });
+    const opened = await env.DB.prepare("SELECT detail FROM events WHERE kind = 'packets' AND name = 'open' AND subject = ?").bind(`${team}/anna`).first<{ detail: string }>();
+    expect(JSON.parse(opened!.detail)).toEqual({ received: true, packet: packetId });
 
     // Once anna has joined, a send says nothing about invitations.
     const later = await call(joe, "threadpacket_send", { title: "Paint colours", brief: "Pick one.", to: "anna", idempotency_key: crypto.randomUUID() });

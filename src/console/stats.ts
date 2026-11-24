@@ -577,16 +577,17 @@ export interface FunnelData {
 }
 
 /**
- * Invitations over 28 days: how many outside admins made, how many invitees opened their link, and of those, how
- * many then read a packet in the browser and how many connected an assistant. browserOnly counts every outside
- * person who opened a packet in the browser in 28 days and connected no assistant in the 30 days of records.
+ * Invitations of new people in outside teams over 28 days: the people invited, those of them who opened their
+ * link, and of those, who then opened a packet sent to them in the browser and who connected an assistant. Each
+ * row is part of the row above. preAssistant counts packets that outside people received and opened in the browser
+ * in 28 days before any assistant of theirs connected (within the 30 days of records), and those people.
  */
 export interface InviteData {
-  made: number;
+  invited: number;
   opened: number;
   readInBrowser: number;
   connected: number;
-  browserOnly: number;
+  preAssistant: { packets: number; people: number };
 }
 
 /** Page views of the public pages (src/store/pageviews.ts). */
@@ -699,26 +700,37 @@ async function funnelData(db: D1Database, pages: WebData["pages"], now: number):
 
 async function inviteData(db: D1Database, now: number): Promise<InviteData> {
   const since = isoAgo(now, 28 * DAY);
-  const opened = (alias: string) => `${alias}.kind = 'console' AND ${alias}.name = 'invite_open' AND ${alias}.outcome = 'ok' AND ${alias}.ts >= ? AND ${outsideWhere(`${alias}.subject`)}`;
-  const browserOpen = (alias: string) => `${alias}.kind = 'packets' AND ${alias}.name = 'open' AND ${alias}.outcome = 'ok'`;
+  // New people invited in the window: each invite event names its invitee.
+  const invited = `SELECT json_extract(e.detail, '$.invitee') AS invitee FROM events e
+    WHERE e.kind = 'console' AND e.name = 'invite' AND e.outcome = 'ok' AND e.ts >= ? AND ${outsideWhere("e.subject")}`;
+  const receivedOpen = (alias: string) => `${alias}.kind = 'packets' AND ${alias}.name = 'open' AND ${alias}.outcome = 'ok' AND json_extract(${alias}.detail, '$.received') = 1`;
   const assistant = (alias: string) => `${alias}.kind IN ('initialize', 'token')`;
-  const r = await one<{ made: number; opened: number; read_in_browser: number; connected: number; browser_only: number }>(
+  const preAssistant = `${receivedOpen("p")} AND p.ts >= ? AND ${outsideWhere("p.subject")}
+    AND NOT EXISTS (SELECT 1 FROM events a WHERE ${assistant("a")} AND a.subject = p.subject AND a.ts < p.ts)`;
+  const r = await one<{ invited: number; opened: number; read_in_browser: number; connected: number; packets: number; people: number }>(
     db,
-    `SELECT (SELECT COUNT(*) FROM events e WHERE e.kind = 'console' AND e.name = 'invite' AND e.outcome IN ('ok', 'reinvite') AND e.ts >= ? AND ${outsideWhere("e.subject")}) AS made,
-            (SELECT COUNT(DISTINCT o.subject) FROM events o WHERE ${opened("o")}) AS opened,
-            (SELECT COUNT(DISTINCT o.subject) FROM events o WHERE ${opened("o")}
-               AND EXISTS (SELECT 1 FROM events p WHERE ${browserOpen("p")} AND p.subject = o.subject AND p.ts >= o.ts)) AS read_in_browser,
-            (SELECT COUNT(DISTINCT o.subject) FROM events o WHERE ${opened("o")}
-               AND EXISTS (SELECT 1 FROM events a WHERE ${assistant("a")} AND a.subject = o.subject AND a.ts >= o.ts)) AS connected,
-            (SELECT COUNT(DISTINCT p.subject) FROM events p WHERE ${browserOpen("p")} AND p.ts >= ? AND ${outsideWhere("p.subject")}
-               AND NOT EXISTS (SELECT 1 FROM events a WHERE ${assistant("a")} AND a.subject = p.subject)) AS browser_only`,
-    since,
+    `WITH invited AS (${invited}),
+          opened AS (SELECT o.subject, MIN(o.ts) AS ts FROM events o
+                     WHERE o.kind = 'console' AND o.name = 'invite_open' AND o.outcome = 'ok' AND o.ts >= ? AND o.subject IN (SELECT invitee FROM invited)
+                     GROUP BY o.subject)
+     SELECT (SELECT COUNT(DISTINCT invitee) FROM invited) AS invited,
+            (SELECT COUNT(*) FROM opened) AS opened,
+            (SELECT COUNT(*) FROM opened o WHERE EXISTS (SELECT 1 FROM events p WHERE ${receivedOpen("p")} AND p.subject = o.subject AND p.ts >= o.ts)) AS read_in_browser,
+            (SELECT COUNT(*) FROM opened o WHERE EXISTS (SELECT 1 FROM events a WHERE ${assistant("a")} AND a.subject = o.subject AND a.ts >= o.ts)) AS connected,
+            (SELECT COUNT(DISTINCT json_extract(p.detail, '$.packet')) FROM events p WHERE ${preAssistant}) AS packets,
+            (SELECT COUNT(DISTINCT p.subject) FROM events p WHERE ${preAssistant}) AS people`,
     since,
     since,
     since,
     since,
   );
-  return { made: r?.made ?? 0, opened: r?.opened ?? 0, readInBrowser: r?.read_in_browser ?? 0, connected: r?.connected ?? 0, browserOnly: r?.browser_only ?? 0 };
+  return {
+    invited: r?.invited ?? 0,
+    opened: r?.opened ?? 0,
+    readInBrowser: r?.read_in_browser ?? 0,
+    connected: r?.connected ?? 0,
+    preAssistant: { packets: r?.packets ?? 0, people: r?.people ?? 0 },
+  };
 }
 
 /** The last 12 weeks from the daily totals (src/store/totals.ts) and page views, from the first week with a count above 0. */

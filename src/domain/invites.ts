@@ -61,7 +61,7 @@ export async function createInvitation(db: D1Database, cfg: Config, inviter: str
     db.prepare("DELETE FROM invites WHERE handle = ? AND used_at IS NULL").bind(identity),
     db.prepare("INSERT INTO invites (token_hash, handle, invited_by, created_at, expires_at) VALUES (?, ?, ?, ?, ?)").bind(await sha256Hex(token), identity, inviter, nowIso(), expires_at),
   ]);
-  await recordEvent(db, { kind: "console", name: "invite", subject: inviter, outcome: exists ? "reinvite" : "ok" });
+  await recordEvent(db, { kind: "console", name: "invite", subject: inviter, outcome: exists ? "reinvite" : "ok", detail: { invitee: identity } });
   return { username: handle, team: tenant, invite_url: `${cfg.publicUrl}/invite/${token}`, expires_at, new_member: !exists };
 }
 

@@ -162,6 +162,10 @@ export class D1Repository implements Repository {
     return (await this.db.prepare("SELECT 1 AS ok FROM members WHERE handle = ?").bind(handle).first<{ ok: number }>()) !== null;
   }
 
+  async isAdmin(handle: string): Promise<boolean> {
+    return (await this.db.prepare("SELECT 1 AS ok FROM admin_members WHERE handle = ?").bind(handle).first<{ ok: number }>()) !== null;
+  }
+
   async createAttachment(a: AttachmentRow): Promise<void> {
     await this.db
       .prepare(

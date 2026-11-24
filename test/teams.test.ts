@@ -97,8 +97,18 @@ describe("teammates", () => {
     const listed = /Teammates: ([^.]*)\./.exec(text)![1]!.split(", ");
     expect(listed).toEqual(expect.arrayContaining(["bob", "mallory"]));
     expect(listed).not.toContain("alice");
-    // Someone new: the assistant asks the user before inviting them.
-    expect(text).toContain('If "carol" is someone new, ask the user whether to invite them. Only if they agree: call threadpacket_invite');
+    // alice is not an admin, so the assistant is not offered an invitation it cannot make.
+    expect(text).toContain('If "carol" is someone new, only the team\'s admin can invite them: tell the user to ask their admin.');
+    expect(text).not.toContain("threadpacket_invite");
+
+    // An admin's assistant asks the user before inviting.
+    await env.DB.prepare("INSERT OR IGNORE INTO admin_members (handle) VALUES ('alice')").run();
+    try {
+      const asAdmin = errorText(await teamCall(a, "threadpacket_send", { title, brief: "x", to: "carol", idempotency_key: crypto.randomUUID() }));
+      expect(asAdmin).toContain('If "carol" is someone new, ask the user whether to invite them. Only if they agree: call threadpacket_invite');
+    } finally {
+      await env.DB.prepare("DELETE FROM admin_members WHERE handle = 'alice'").run();
+    }
     const titles = (expectOk(await teamCall(a, "threadpacket_inbox")).packets as Array<{ title: string }>).map((p) => p.title);
     expect(titles).not.toContain(title);
   });

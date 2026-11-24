@@ -193,24 +193,38 @@ describe("the funnel and the daily totals", () => {
     expect(c.web.days.at(-2)).toEqual({ date: "2031-03-11", views: 11 });
   });
 
-  it("follows invitations of outside teams to a packet read in the browser, and counts readers with no assistant", async () => {
+  it("follows new people invited by outside teams to a packet opened in the browser, and counts opens before an assistant", async () => {
     const [ti, tin] = [`iv-${s}`, `ivi-${s}`];
     await addTeam(ti, "2031-03-01T09:00:00.000Z");
     await addTeam(tin, "2031-03-01T09:00:00.000Z", 1);
-    for (const who of ["ann", "bob", "cat"]) await addEvent("2031-03-02T09:00:00.000Z", "console", "invite", `${ti}/joe`, who === "cat" ? "reinvite" : "ok");
-    await addEvent("2031-03-02T09:00:00.000Z", "console", "invite", `${tin}/joe`);
-    // ann opens her link and reads in the browser, then connects Claude; bob opens his link and reads in the browser only.
+    const invite = (ts: string, inviter: string, invitee: string, outcome = "ok") =>
+      env.DB.prepare("INSERT INTO events (ts, kind, name, subject, outcome, detail) VALUES (?, 'console', 'invite', ?, ?, ?)").bind(ts, inviter, outcome, JSON.stringify({ invitee })).run();
+    const open = (ts: string, subject: string, packet: string | null) =>
+      env.DB.prepare("INSERT INTO events (ts, kind, name, subject, outcome, detail) VALUES (?, 'packets', 'open', ?, 'ok', ?)").bind(ts, subject, packet ? JSON.stringify({ received: true, packet }) : null).run();
+    // ann is invited twice (one person), bob once, cat was already a member (a new code, not a new person).
+    await invite("2031-03-02T09:00:00.000Z", `${ti}/joe`, `${ti}/ann`);
+    await invite("2031-03-02T09:30:00.000Z", `${ti}/joe`, `${ti}/ann`);
+    await invite("2031-03-02T09:00:00.000Z", `${ti}/joe`, `${ti}/bob`);
+    await invite("2031-03-02T09:00:00.000Z", `${ti}/joe`, `${ti}/cat`, "reinvite");
+    await invite("2031-03-02T09:00:00.000Z", `${tin}/joe`, `${tin}/dee`);
+    // ann opens her link, opens two packets in the browser, then connects Claude and opens a third.
     await addEvent("2031-03-03T09:00:00.000Z", "console", "invite_open", `${ti}/ann`);
-    await addEvent("2031-03-03T09:01:00.000Z", "packets", "open", `${ti}/ann`);
+    await open("2031-03-03T09:01:00.000Z", `${ti}/ann`, "pk_a1");
+    await open("2031-03-03T09:02:00.000Z", `${ti}/ann`, "pk_a1");
+    await open("2031-03-03T09:03:00.000Z", `${ti}/ann`, "pk_a2");
     await addEvent("2031-03-04T09:00:00.000Z", "initialize", "Claude", `${ti}/ann`);
+    await open("2031-03-04T09:01:00.000Z", `${ti}/ann`, "pk_a3");
+    // bob opens his link but no packet. cat opens her link and a packet: not a new person.
     await addEvent("2031-03-03T10:00:00.000Z", "console", "invite_open", `${ti}/bob`);
-    await addEvent("2031-03-03T10:01:00.000Z", "packets", "open", `${ti}/bob`);
-    await addEvent("2031-03-03T10:02:00.000Z", "packets", "open", `${ti}/bob`);
+    await addEvent("2031-03-03T11:00:00.000Z", "console", "invite_open", `${ti}/cat`);
+    await open("2031-03-03T11:01:00.000Z", `${ti}/cat`, "pk_c1");
+    // joe opens a packet he sent: not received, so not counted.
+    await open("2031-03-03T12:00:00.000Z", `${ti}/joe`, null);
     // An internal team's invitee is not counted.
     await addEvent("2031-03-03T11:00:00.000Z", "console", "invite_open", `${tin}/dee`);
-    await addEvent("2031-03-03T11:01:00.000Z", "packets", "open", `${tin}/dee`);
+    await open("2031-03-03T11:01:00.000Z", `${tin}/dee`, "pk_d1");
 
-    expect((await controlCenter(env.DB, now)).invites).toEqual({ made: 3, opened: 2, readInBrowser: 2, connected: 1, browserOnly: 1 });
+    expect((await controlCenter(env.DB, now)).invites).toEqual({ invited: 2, opened: 2, readInBrowser: 1, connected: 1, preAssistant: { packets: 3, people: 2 } });
   });
 
   it("keeps daily totals of outside activity, recomputing the last 3 days and filling missing ones", async () => {

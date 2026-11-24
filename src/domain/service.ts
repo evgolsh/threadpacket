@@ -393,11 +393,13 @@ export class ThreadpacketService {
     if (!isTeam(r) && !(await this.repo.isMember(r))) {
       const mates = (await this.repo.listTenantMembers(tenantOf(owner))).filter((m) => m !== owner).map(handleOf);
       const said = to?.trim() ?? "";
-      const invite = `If "${said}" is someone new, ask the user whether to invite them. Only if they agree: call threadpacket_invite (team admins), send this packet again to the new username, and give the user the invitation link to forward. Opening it shows them this packet in their browser, with no assistant needed.`;
+      const invite = (await this.repo.isAdmin(owner))
+        ? `If "${said}" is someone new, ask the user whether to invite them. Only if they agree: call threadpacket_invite, send this packet again to the new username, and give the user the invitation link to forward. Opening it shows them this packet in their browser, with no assistant needed.`
+        : `If "${said}" is someone new, only the team's admin can invite them: tell the user to ask their admin.`;
       throw new ThreadpacketError(
         "invalid_input",
         mates.length
-          ? `to: "${said}" is not on the user's team. Teammates: ${mates.join(", ")}. If the user meant one of them, pass that username, or "team" for everyone. ${invite}`
+          ? `to: "${said}" is not on the user's team. Teammates: ${mates.join(", ")}. If the user meant one of them, pass that username, or "team" for everyone; if unsure which, ask the user. ${invite}`
           : `to: "${said}" is not on the user's team, and they have no teammates yet. Omit to to send to themselves. ${invite}`,
       );
     }

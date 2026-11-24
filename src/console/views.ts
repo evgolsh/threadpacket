@@ -601,7 +601,7 @@ export function tenantsPage(v: Viewer, d: ControlCenterData, note: string | null
   const list = (rows: Array<{ k: string; n: number }>, empty: string) =>
     rows.length ? rows.map((r) => `<div class="small" style="display:flex;justify-content:space-between"><span class="mono">${esc(r.k)}</span><span>${num(r.n)}</span></div>`).join("") : `<div class="small muted">${empty}</div>`;
   const share = (n: number, of: number) => (of ? `${Math.round((n / of) * 100)}%` : "—");
-  const width = (n: number, max: number) => (max ? Math.round((n / max) * 100) : 0);
+  const width = (n: number, max: number) => (max ? Math.min(100, Math.round((n / max) * 100)) : 0);
 
   const f = d.funnel;
   const step = (label: Html, n: number, of: number | null, max: number) =>
@@ -622,13 +622,13 @@ export function tenantsPage(v: Viewer, d: ControlCenterData, note: string | null
   const iv = d.invites;
   const invites = `<div class="panel flush">
     <div class="t">Invitations, 28 days</div>
-    <table><thead><tr><th></th><th class="r">count</th><th></th><th class="r">share</th></tr></thead><tbody>
-      ${step("Invitations made", iv.made, null, iv.made)}
-      ${step("… opened by the invitee", iv.opened, iv.made, iv.made)}
-      ${step("… then read a packet in the browser", iv.readInBrowser, iv.opened, iv.made)}
-      ${step("… then connected an assistant", iv.connected, iv.opened, iv.made)}
+    <table><thead><tr><th></th><th class="r">people</th><th></th><th class="r">of the row above</th></tr></thead><tbody>
+      ${step("New people invited", iv.invited, null, iv.invited)}
+      ${step("… opened their invitation", iv.opened, iv.invited, iv.invited)}
+      ${step("… then opened a packet sent to them in the browser", iv.readInBrowser, iv.opened, iv.invited)}
+      ${step("… then connected an assistant", iv.connected, iv.opened, iv.invited)}
     </tbody></table>
-    <div class="small muted" style="padding:10px 14px">${plural(iv.browserOnly, "person", "people")} read a packet in the browser with no assistant connected. Opened is a share of invitations made; the last two rows are shares of invitations opened.</div>
+    <div class="small muted" style="padding:10px 14px">${plural(iv.preAssistant.packets, "packet")} received were opened in the browser by ${plural(iv.preAssistant.people, "person", "people")} before they connected an assistant. The last row is a share of those who opened their invitation.</div>
   </div>`;
 
   const sources = `<div class="panel">

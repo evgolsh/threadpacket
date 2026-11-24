@@ -117,6 +117,8 @@ export interface Repository {
   findLivePacketWithAttachment(owner: string, attachmentId: string, nowIso: string): Promise<string | null>;
   /** True when this handle is in the built-in sign-in's member list. */
   isMember(handle: string): Promise<boolean>;
+  /** True when this member has the admin grant, so can invite people. */
+  isAdmin(handle: string): Promise<boolean>;
 
   createAttachment(row: AttachmentRow): Promise<void>;
   getAttachment(id: string): Promise<AttachmentRow | null>;

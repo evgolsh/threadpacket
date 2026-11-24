@@ -339,7 +339,9 @@ export function packetsRoutes(): Hono<{ Bindings: Env; Variables: PacketsVariabl
         cards.push({ ...d, view: `/packets/view/${base}/${encodeURIComponent(d.filename)}`, download: `/packets/download/${base}`, preview: await preview(c, attachment) });
       }
       const v = await viewer(c, s);
-      await recordEvent(c.env.DB, { kind: "packets", name: "open", subject: s.handle, outcome: "ok" });
+      // A packet someone else sent: Tenants counts these opens by people with no assistant connected yet.
+      const received = h.from !== handleOf(s.handle);
+      await recordEvent(c.env.DB, { kind: "packets", name: "open", subject: s.handle, outcome: "ok", detail: received ? { received: true, packet: packetId } : null });
       return respond((nonce) => packetPage(v, h, delivery, renderBrief(h.brief), cards, Date.now(), nonce));
     } catch (e) {
       if (!(e instanceof ThreadpacketError)) throw e;
