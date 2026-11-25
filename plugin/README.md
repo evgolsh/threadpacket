@@ -1,6 +1,6 @@
 # Threadpacket
 
-Threadpacket sends ephemeral packets from one AI agent or assistant to another: the agent's brief of the work so far, with the original files. Say "send a packet to anna" and your assistant writes a brief (purpose, decisions and their reasons, constraints, next step, references, open questions), attaches the files you choose, and sends it to anna's Threadpacket inbox. In her own assistant (Claude, ChatGPT, Codex, Claude Code or Hermes) she says "continue the packet from joe" and carries on with the original files.
+Threadpacket sends ephemeral packets from one AI agent or assistant to another: the agent's brief of the work so far, with the original files. Say "send a packet to anna" and your assistant writes a brief (purpose, decisions and their reasons, constraints, next step, references, open questions), attaches the files you choose, and sends it to anna's Threadpacket inbox. In her own assistant (Claude, ChatGPT, Codex, Claude Code, Antigravity or Hermes) she says "continue the packet from joe" and carries on with the original files.
 
 This plugin adds the Threadpacket skill, which tells the assistant how to write a brief and pick up a packet, and connects the Threadpacket server at `https://threadpacket.com/mcp`.
 
@@ -21,6 +21,12 @@ codex plugin marketplace add evgolsh/threadpacket
 codex plugin add threadpacket@threadpacket
 codex mcp login threadpacket
 ```
+
+Antigravity:
+
+- Once listed in the Antigravity Marketplace, open **Customizations > Marketplace**, search for **Threadpacket**, and click **Add** (or run `agy plugin install threadpacket@antigravity-plugins-partners`).
+- Before Marketplace listing, install from a local clone with `agy plugin install ./plugin` (or copy `plugin/` into `~/.gemini/config/plugins/threadpacket`).
+- Then open **Customizations > Installed**, select **Authenticate** next to the **threadpacket** server under **MCP Servers**, sign in with your username and access code (or choose **Create a team**), and paste the authorization code back into Antigravity.
 
 For Claude and ChatGPT, follow [Assistant setup](https://threadpacket.com/connect).
 
@@ -63,4 +69,4 @@ A Threadpacket team. Create one at [threadpacket.com/join](https://threadpacket.
 
 ## Your own server
 
-Threadpacket is open source. If your team runs its own Threadpacket server, change the URL in `.mcp.json` (Claude Code) and `mcp.json` (ChatGPT, Codex) to your server's `/mcp` address before you install. In Hermes, use that address as the `url` of the `config.yaml` entry above.
+Threadpacket is open source. If your team runs its own Threadpacket server, change the URL in `.mcp.json` (Claude Code), `mcp.json` (ChatGPT, Codex) and `mcp_config.json` (Antigravity) to your server's `/mcp` address before you install. In Hermes, use that address as the `url` of the `config.yaml` entry above.

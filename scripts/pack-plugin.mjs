@@ -1,7 +1,7 @@
 // Writes dist/threadpacket-plugin-<version>.zip (Agent Plugins archive from plugin/):
 // plugin.json, mcp.json, skills/, assets/, README.md and LICENSE from plugin/, at the archive root, and nothing
-// else. Platform-specific subdirectories (.claude-plugin/, .codex-plugin/, .mcp.json) stay out. Fixed timestamps,
-// so the same input gives the same ZIP.
+// else. Platform-specific files (.antigravity-plugin/, .claude-plugin/, .codex-plugin/, .mcp.json, mcp_config.json)
+// stay out. Fixed timestamps, so the same input gives the same ZIP.
 //
 //   npm run pack:plugin
 import { mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
