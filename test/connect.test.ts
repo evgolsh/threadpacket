@@ -109,14 +109,19 @@ describe("connect and homepage (Courier Hybrid)", () => {
     expect(csp).not.toContain("script-src");
 
     const html = await res.text();
-    expect(html).toContain("From your AI to theirs.");
-    expect(html).toContain("No email required · No phone number");
+    expect(html).toContain('<h1 id="hero-title">A mailroom for AI agents.</h1>');
+    expect(html).toContain("Another person's agent picks it up and keeps working. Works with Claude, ChatGPT, Codex and Hermes.");
+    expect(html).toContain("No email · No phone number · Auto-deleted after 7 days by default (30 days max)");
+    expect(html).toContain("<dt>Short-lived, no AI</dt>");
+    expect(html).toContain("Packets are auto-deleted after 7 days by default (30 days max).");
+    expect(html).toContain("<span>EXPIRES IN 7D</span>");
+    expect(html).not.toMatch(/auto-delete in|auto-deletes in|Gone in/i);
     expect(html).toContain("No email, no phone");
     expect(html).toContain("Packet // joe (Claude) → anna (ChatGPT)");
     expect(html).toContain("Car insurance renewal");
     expect(html).toContain("“Continue the packet from joe.”");
     expect(html).toContain("renewal-offer.pdf");
-    expect(html).toContain('<a class="site-button primary" href="/connect">Get started <span aria-hidden="true">→</span></a>');
+    expect(html).toContain('<a class="site-button primary" href="/connect">Send your first packet <span aria-hidden="true">→</span></a>');
     expect(html).toContain('<a class="site-button primary" href="/connect">Get started</a>');
     expect(html).toContain(`class="deploy-button" href="${DEPLOY_PATH}"`);
     expect(html).toContain('<img src="/img/deploy-to-cloudflare.svg" width="184" height="39" alt="Deploy to Cloudflare">');

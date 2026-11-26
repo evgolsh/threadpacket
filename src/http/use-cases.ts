@@ -1,4 +1,4 @@
-import { PRIVATE_DEFAULT_EXPIRY_HOURS, type Config } from "../env";
+import { PRIVATE_DEFAULT_EXPIRY_HOURS, PRIVATE_MAX_EXPIRY_HOURS, type Config } from "../env";
 import { BASE_CSS, FAVICON_LINK, FILE_ICON, FONT_PRELOAD, REG_TICKS } from "./style";
 import { DEPLOY_PATH, GITHUB_URL, PAGE_HEADER_CSS, pageFooter, pageHeader } from "./header";
 import { CLAUDE_ICON, GITHUB_ICON, OPENAI_ICON } from "./assistant-icons";
@@ -112,18 +112,20 @@ const PAGE_CSS = `
 export function useCasesPage(cfg: Config, opts: { active?: boolean; signedIn?: boolean } = {}): string {
   const active = opts.active ?? true;
   const open = cfg.mode === "control" && active;
-  const ttl = days(open ? cfg.defaultExpiryHours : PRIVATE_DEFAULT_EXPIRY_HOURS);
+  const ttlHours = open ? cfg.defaultExpiryHours : PRIVATE_DEFAULT_EXPIRY_HOURS;
+  const ttl = days(ttlHours);
+  const retention = `after ${ttl} by default (${days(open ? cfg.maxExpiryHours : PRIVATE_MAX_EXPIRY_HOURS)} max)`;
   const heroActions = open && opts.signedIn
     ? `<a class="site-button primary" href="/packets">Dashboard <span aria-hidden="true">→</span></a><a class="site-button" href="/connect">Assistant setup</a>`
     : open
-      ? `<a class="site-button primary" href="/connect">Get started <span aria-hidden="true">→</span></a><a class="site-button" href="/join">Create a team</a>`
+      ? `<a class="site-button primary" href="/connect">Send your first packet <span aria-hidden="true">→</span></a><a class="site-button" href="/join">Create a team</a>`
       : `<a class="site-button primary" href="#install"><span>Self-host Threadpacket</span> <span aria-hidden="true">↓</span></a><a class="site-button" href="${GITHUB_URL}" target="_blank" rel="noopener">${GITHUB_ICON}<span>GitHub</span></a>`;
   const setupNote = !open
     ? `<p class="hero-setup-note">Deployed this server? <a href="/console/setup">Complete initial setup ↗</a></p>`
     : "";
 
   const description =
-    "Send a brief and original files from your AI assistant to someone else’s across Claude, ChatGPT, Codex, and Hermes. No email or phone number needed, and packets are deleted after 7 days.";
+    "Send a brief and original files from your AI assistant to someone else’s across Claude, ChatGPT, Codex, and Hermes. No email or phone number needed, and packets are auto-deleted after 7 days by default (30 days max).";
 
   return `<!doctype html><html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
@@ -140,8 +142,8 @@ ${pageHeader("use-cases", { active, mode: cfg.mode, signedIn: opts.signedIn })}
   <span id="install" aria-hidden="true"></span>
   <section class="hero" aria-labelledby="hero-title">
     <div class="app-thread">Claude <i>→</i> ChatGPT <i>·</i> Codex <i>·</i> Claude Code <i>·</i> Hermes</div>
-    <h1 id="hero-title">From your AI to theirs.</h1>
-    <p class="hero-lead">Send a prepared brief and original files from your assistant so your partner or teammate can continue in theirs.</p>
+    <h1 id="hero-title">A mailroom for AI agents.</h1>
+    <p class="hero-lead">Your agent packs a brief and the original files. Another person's agent picks it up and keeps working. Works with Claude, ChatGPT, Codex and Hermes.</p>
     <div class="hero-actions">${heroActions}</div>
     ${setupNote}
   </section>
@@ -156,7 +158,7 @@ ${pageHeader("use-cases", { active, mode: cfg.mode, signedIn: opts.signedIn })}
         <label for="stage-live">Live packet</label>
         <label for="stage-install">Self-host (Cloudflare)</label>
       </div>
-      <span class="stage-caption">${open ? "No email required · No phone number · " : "MIT open source · "}${esc(ttl)} auto-delete</span>
+      <span class="stage-caption">${open ? "No email · No phone number · " : "MIT open source · "}Auto-deleted ${esc(retention)}</span>
     </div>
 
     <div class="courier-window pane-live">
@@ -191,7 +193,7 @@ ${pageHeader("use-cases", { active, mode: cfg.mode, signedIn: opts.signedIn })}
           <div class="c-meta">
             <span>FROM: joe</span>
             <span>TO: anna</span>
-            <span>AUTO-DELETES IN 7D</span>
+            <span>EXPIRES IN ${Math.round(ttlHours / 24)}D</span>
           </div>
           <h2>Car insurance renewal</h2>
           <p class="c-brief">Compared all three renewal quotes. <strong>Offer B (€640/yr)</strong> keeps the same €300 glass and collision deductible for €140 less. Ask our current insurer to match €640 tomorrow; switch before Friday if they refuse.</p>
@@ -263,8 +265,8 @@ npm run setup -- --members=tim,tom</code></pre>
       <dd>Just a username and an access code. No email address, phone, or Google login.</dd>
     </div>
     <div class="fact">
-      <dt>Gone in ${esc(ttl)}, no AI</dt>
-      <dd>Packets auto-delete after ${esc(ttl)}. Threadpacket makes no model calls.</dd>
+      <dt>Short-lived, no AI</dt>
+      <dd>Packets are auto-deleted ${esc(retention)}. Threadpacket makes no model calls.</dd>
     </div>
   </dl>
 </main>${pageFooter({ active, mode: cfg.mode, signedIn: opts.signedIn })}</body></html>`;

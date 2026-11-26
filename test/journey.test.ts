@@ -48,9 +48,9 @@ describe("the hosted story: joe and anna", () => {
       env.DB.prepare("INSERT OR IGNORE INTO admin_members (handle) VALUES ('operator')"),
     ]);
 
-    // The homepage: Get started leads to Assistant setup, and the live packet pane tells joe and anna's story.
+    // The homepage: Send your first packet leads to Assistant setup, and the live packet pane tells joe and anna's story.
     const home = await text("/");
-    expect(home).toContain('<a class="site-button primary" href="/connect">Get started');
+    expect(home).toContain('<a class="site-button primary" href="/connect">Send your first packet');
     hostedStory(home.slice(0, home.indexOf('class="courier-window pane-install"')), "/ (hero and live packet pane)");
 
     // Assistant setup, signed out: a new person creates the team when they sign in.

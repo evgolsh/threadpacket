@@ -410,7 +410,7 @@ Get started: ${f.site}/connect · or tell your assistant: “Set up Threadpacket
 
 - **Your notes and the files.** The brief says what you decided and what is left to do. PDFs and images go with it, byte for byte. Open a packet in Packets to read the brief and see the files.
 - **Their own assistant.** Your partner can use ChatGPT while you use Claude. Each person signs in with their own username.
-- **Storage, not AI.** Threadpacket keeps the brief and files and deletes them after ${days(f.days)} by default. It makes no model calls.
+- **Storage, not AI.** Threadpacket keeps the brief and files and deletes them after ${days(f.days)} by default (${days(f.maxDays)} max). It makes no model calls.
 
 ## What people send
 

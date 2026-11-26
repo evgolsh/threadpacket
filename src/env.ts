@@ -57,6 +57,7 @@ export const CONTROL_CENTER_URL = "https://threadpacket.com";
 
 /** How long a packet lives by default on a private install. */
 export const PRIVATE_DEFAULT_EXPIRY_HOURS = 24 * 30;
+export const PRIVATE_MAX_EXPIRY_HOURS = 24 * 90;
 /** On the hosted service: a week by default (time for the other person to get to it), a month at most. */
 export const HOSTED_DEFAULT_EXPIRY_HOURS = 24 * 7;
 export const HOSTED_MAX_EXPIRY_HOURS = 24 * 30;
@@ -166,7 +167,7 @@ export function configFrom(env: Env, requestOrigin = ""): Config {
     cleanupRounds: 5,
     // The hosted service keeps packets shorter than a private install: it stores everyone's files.
     defaultExpiryHours: control ? HOSTED_DEFAULT_EXPIRY_HOURS : PRIVATE_DEFAULT_EXPIRY_HOURS,
-    maxExpiryHours: control ? HOSTED_MAX_EXPIRY_HOURS : 24 * 90,
+    maxExpiryHours: control ? HOSTED_MAX_EXPIRY_HOURS : PRIVATE_MAX_EXPIRY_HOURS,
     uploadTicketTtlMs: 15 * 60_000,
     downloadTicketTtlMs: 10 * 60_000,
     stagingTtlMs: 24 * hour,

@@ -70,7 +70,7 @@ describe("the control center", () => {
   it("serves the homepage, the sign-up form and the public counters, and receives update checks", async () => {
     const home = await fetchAs(ctl, "/");
     expect(home.status).toBe(200);
-    expect(await home.text()).toContain("From your AI to theirs.");
+    expect(await home.text()).toContain("A mailroom for AI agents.");
     const join = await fetchAs(ctl, "/join");
     expect(join.status).toBe(200);
     const page = await join.text();
