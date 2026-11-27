@@ -39,11 +39,11 @@ export interface Host {
   source: { label: string; url: string };
 }
 
-/** Each assistant's setup steps. Rendered as Markdown for agents in src/http/agents.ts. */
+/** Each assistant's setup steps. Rendered as Markdown for agents in src/http/agents.ts. On the hosted service, `newcomer` (a reader who isn't signed in) is told the sign-in page can create a team. */
 const HOSTED_ORDER = ["claude", "chatgpt", "claude-code", "codex", "hermes"];
 
-export function hosts(url: string, control = false): Host[] {
-  const signIn = control ? "choose **Create a team** if you're new, or sign in with your username and access code," : "sign in with your username and access code";
+export function hosts(url: string, control = false, newcomer = control): Host[] {
+  const signIn = newcomer ? "choose **Create a team** if you're new, or sign in with your username and access code," : "sign in with your username and access code";
   const SignIn = signIn[0]!.toUpperCase() + signIn.slice(1);
   const { host, origin } = new URL(url);
   const list: Host[] = [
@@ -163,7 +163,7 @@ function hostPanel(h: Host, first: boolean, url: string, say: Say): string {
   const steps = h.steps
     .map((s) =>
       s.button
-        ? `<li><a class="btn step-button" href="${esc(s.button.href)}" target="_blank" rel="noopener">${esc(s.button.label)}</a><p class="step-hint">${esc(s.button.hint)}</p><p class="step-alt">${inline(s.text)}</p></li>`
+        ? `<li class="button-step"><a class="btn step-button" href="${esc(s.button.href)}" target="_blank" rel="noopener">${esc(s.button.label)}</a><p class="step-hint">${esc(s.button.hint)}</p><p class="step-alt">${inline(s.text)}</p></li>`
         : `<li><p>${inline(s.text)}</p>${s.command ? `<div class="cmd"><code>${showCommand(s.command, url)}</code>${copyButton(s.command, s.command === url ? "Copy the server address" : `Copy the ${h.name} command`)}</div>` : ""}</li>`,
     )
     .join("\n        ");
@@ -197,7 +197,7 @@ const PAGE_CSS = `
   /* Courier Setup Window inside .dot-stage */
   .courier-setup { background:var(--panel); border:1px solid var(--line); border-radius:12px; overflow:hidden; box-shadow:var(--shadow-md); }
 
-  .split { display:grid; grid-template-columns:204px minmax(0,1fr); min-height:340px; }
+  .connect-split { display:grid; grid-template-columns:204px minmax(0,1fr); min-height:340px; }
   .rail { border-right:1px solid var(--line); padding:12px 10px; background:color-mix(in srgb,var(--subtle) 45%,var(--panel)); }
   .tabs { display:grid; gap:3px; }
   .tabs[hidden] { display:none; }
@@ -236,8 +236,9 @@ const PAGE_CSS = `
   .steps .btn.step-button:hover { filter:brightness(1.07); color:#fff; }
   .steps .step-hint { margin-top:6px; font-size:12.5px; color:var(--muted); }
   .steps .step-alt { margin-top:2px; font-size:12.5px; color:var(--muted); }
+  .steps li.button-step::before { margin-top:5px; }
   .steps li.first-packet::before { background:var(--ink); border-color:var(--ink); color:var(--ground); }
-  .steps .prompt-row { justify-content:flex-start; gap:12px; margin-top:6px; }
+  .steps .prompt-row { margin-top:6px; }
   .steps .say-quote { font-size:14.5px; padding-top:0; }
   .steps .prompt-row .btn { min-height:26px; padding:3px 9px; font-size:11px; }
   .foot { padding-top:8px; border-top:1px solid var(--line-soft); font-size:12px; color:var(--muted); }
@@ -246,7 +247,7 @@ const PAGE_CSS = `
   .guide-evidence .note { margin:6px 0; line-height:1.5; max-width:72ch; }
   .guide-evidence .status { margin:6px 0 8px; line-height:1.5; max-width:72ch; }
   html:not(.js) & .rail { display:none; }
-  html:not(.js) & .split { display:block; }
+  html:not(.js) & .connect-split { display:block; }
 
   .btn { text-decoration:none; flex:none; min-height:34px; padding:6px 13px; border:1px solid var(--line); border-radius:999px; background:var(--panel); color:var(--ink); font:500 12.5px/1.2 var(--sans); cursor:pointer; display:inline-flex; align-items:center; justify-content:center; }
   .btn:hover { border-color:var(--accent); color:var(--accent); }
@@ -258,13 +259,13 @@ const PAGE_CSS = `
   .after-title { margin-top:24px; font-size:13px; font-weight:600; letter-spacing:-.01em; }
   .say-strip { margin-top:10px; list-style:none; padding:0; display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:20px; }
   .say-strip li { border-left:1.5px solid var(--ink); padding-left:14px; display:flex; flex-direction:column; gap:5px; }
-  .prompt-row { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+  .prompt-row { display:flex; align-items:center; gap:12px; }
   .say-quote { font-size:14.5px; font-weight:600; letter-spacing:-.015em; }
   .say-strip .btn { min-height:26px; padding:3px 9px; font-size:11px; }
 
   .meta-foot { margin-top:22px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px 18px; font-size:12px; color:var(--muted); }
   .privacy { margin-top:8px; }
-  .kv { display:grid; grid-template-columns:84px minmax(0,1fr); margin:8px 0 0; border-top:1px solid var(--line); }
+  .kv { display:grid; grid-template-columns:84px minmax(0,1fr); gap:0; margin:8px 0 0; border-top:1px solid var(--line); }
   .kv dt,.kv dd { margin:0; padding:10px 0; border-bottom:1px solid var(--line-soft); font-size:12.5px; }
   .kv dd { padding-left:16px; color:var(--muted); }
   .kv dt { color:var(--ink); font-weight:500; }
@@ -281,7 +282,7 @@ const PAGE_CSS = `
 
   @media(max-width:760px) {
     .dot-stage { padding:12px; }
-    .split { display:flex; flex-direction:column; }
+    .connect-split { display:flex; flex-direction:column; }
     .rail { border-right:0; border-bottom:1px solid var(--line); padding:8px; }
     .tabs { grid-template-columns:repeat(3,minmax(0,1fr)); }
     [role=tab] { justify-content:center; gap:6px; min-height:38px; padding:6px; font-size:12.5px; }
@@ -296,7 +297,7 @@ const PAGE_CSS = `
 `;
 
 const CONSOLE_SPLIT_CSS = `@media(max-width:960px) {
-  .shell .connect-content .split { display:flex; flex-direction:column; }
+  .shell .connect-content .connect-split { display:flex; flex-direction:column; }
   .shell .connect-content .rail { border-right:0; border-bottom:1px solid var(--line); padding:8px; }
   .shell .connect-content .tabs { grid-template-columns:repeat(3,minmax(0,1fr)); }
   .shell .connect-content [role=tab] { justify-content:center; gap:6px; min-height:38px; padding:6px; font-size:12.5px; }
@@ -400,7 +401,7 @@ export function connectPage(cfg: Config, nonce: string, opts: { needsSetup?: boo
   const active = !opts.needsSetup;
   const url = cfg.mcpResource;
   const control = cfg.mode === "control";
-  const list = hosts(url, control);
+  const list = hosts(url, control, control && !opts.viewer);
   const [firstSay, ...laterSays] = prompts(control, opts.viewer);
   const tabs = list
     .map(
@@ -441,7 +442,7 @@ export function connectPage(cfg: Config, nonce: string, opts: { needsSetup?: boo
   <section class="dot-stage" id="assistants" aria-label="Assistant setup">
     ${REG_TICKS}
     <div class="courier-setup">
-      <div class="split">
+      <div class="connect-split">
         <div class="rail">
           <div class="tabs" role="tablist" aria-label="Assistant" aria-orientation="vertical" hidden>${tabs}</div>
         </div>

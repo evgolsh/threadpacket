@@ -89,6 +89,12 @@ describe("the hosted story: joe and anna", () => {
     expect(firstPackets(joeSetup)).toEqual(Array(5).fill("Send myself a packet."));
     expect(cards(joeSetup)).toEqual(["Invite your partner", "Send a packet"]);
     expect(joeSetup).toContain("“Invite my partner to Threadpacket.”");
+    // Signed in, the sign-in step no longer offers Create a team, and the setup window keeps its own layout class
+    // (the console's bar-chart .split rule is on this page too).
+    expect(joeSetup).toContain("Select <strong>Connect</strong>, sign in with your username and access code and approve access.");
+    expect(joeSetup).not.toContain("<strong>Create a team</strong>");
+    expect(joeSetup).toContain('<div class="connect-split">');
+    expect(joeSetup).not.toContain('class="split"');
     hostedStory(joeSetup, "/connect (joe)");
 
     // joe's assistant invites anna; her link names joe and tells her what to say.
@@ -111,6 +117,7 @@ describe("the hosted story: joe and anna", () => {
     expect(firstPackets(annaSetup)).toEqual(Array(5).fill("Continue my packet."));
     expect(cards(annaSetup)).toEqual(["Send a packet"]);
     expect(annaSetup).not.toContain("Invite my partner");
+    expect(annaSetup).not.toContain("<strong>Create a team</strong>");
     hostedStory(annaSetup, "/connect (anna)");
     const packets = await text("/packets", anna);
     expect(packets).toContain("Tax letter");

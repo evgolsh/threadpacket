@@ -85,9 +85,9 @@ describe("connect and homepage (Courier Hybrid)", () => {
     const html = await (await SELF.fetch(`${ORIGIN}/connect`)).text();
     const link = `https://claude.ai/customize/connectors?modal=add-custom-connector&amp;connectorName=Threadpacket&amp;connectorUrl=${encodeURIComponent(`${ORIGIN}/mcp`)}`;
     expect(html).toContain(
-      `<li><a class="btn step-button" href="${link}" target="_blank" rel="noopener">Add to Claude ↗</a><p class="step-hint">Opens Claude with Threadpacket prefilled.</p><p class="step-alt">Or add it by hand: <a href="https://claude.ai/customize/connectors" target="_blank" rel="noopener">Customize &gt; Connectors</a> &gt; <strong>+ Add</strong> &gt; <strong>Add custom connector</strong>.</p></li>`,
+      `<li class="button-step"><a class="btn step-button" href="${link}" target="_blank" rel="noopener">Add to Claude ↗</a><p class="step-hint">Opens Claude with Threadpacket prefilled.</p><p class="step-alt">Or add it by hand: <a href="https://claude.ai/customize/connectors" target="_blank" rel="noopener">Customize &gt; Connectors</a> &gt; <strong>+ Add</strong> &gt; <strong>Add custom connector</strong>.</p></li>`,
     );
-    expect(html.match(/class="btn step-button"/g)).toHaveLength(1);
+    expect(html.match(/<li class="button-step"><a class="btn step-button"/g)).toHaveLength(1);
     expect(html).not.toMatch(/one-click|one click/i);
 
     const md = await (await SELF.fetch(`${ORIGIN}/connect.md`)).text();
