@@ -30,8 +30,10 @@ const text = async (path: string, cookie?: string) => {
 function hostedStory(html: string, page: string) {
   expect(html, page).not.toMatch(/\b(tim|tom|acme)\b/);
 }
-/** The "First prompts" cards on /connect, in order. */
+/** The "After your first packet" cards on /connect, in order. */
 const cards = (html: string) => [...html.matchAll(/<p class="eyebrow">\d · ([^<]+)<\/p>/g)].map((m) => m[1]);
+/** What each assistant's steps on /connect end with. */
+const firstPackets = (html: string) => [...html.matchAll(/<li class="first-packet">.*?<p class="say-quote">“([^”]+)”/g)].map((m) => m[1]);
 
 async function signIn(team: string, handle: string, code: string): Promise<string> {
   const res = await fetchAs("/login", form({ team, handle, access_code: code }));
@@ -57,8 +59,8 @@ describe("the hosted story: joe and anna", () => {
     const setup = await text("/connect");
     expect(setup).toContain("New to Threadpacket? Create your team when you sign in.");
     expect(setup).toContain("<strong>Create a team</strong> if you&#39;re new");
-    expect(cards(setup)).toEqual(["Try it on your own", "Invite your partner", "Send a packet", "Pick up a packet"]);
-    expect(setup).toContain("“Send myself a packet.”");
+    expect(firstPackets(setup)).toEqual(Array(5).fill("Send myself a packet."));
+    expect(cards(setup)).toEqual(["Invite your partner", "Send a packet", "Pick up a packet"]);
     expect(setup).toContain("“Send a packet to anna.”");
     hostedStory(setup, "/connect");
 
@@ -84,7 +86,8 @@ describe("the hosted story: joe and anna", () => {
     // In the browser, joe's Assistant setup shows what an admin does next: try it alone, invite, then send a packet.
     const joe = await signIn(team, "joe", joeCode);
     const joeSetup = await text("/connect", joe);
-    expect(cards(joeSetup)).toEqual(["Try it on your own", "Invite your partner", "Send a packet"]);
+    expect(firstPackets(joeSetup)).toEqual(Array(5).fill("Send myself a packet."));
+    expect(cards(joeSetup)).toEqual(["Invite your partner", "Send a packet"]);
     expect(joeSetup).toContain("“Invite my partner to Threadpacket.”");
     hostedStory(joeSetup, "/connect (joe)");
 
@@ -105,7 +108,8 @@ describe("the hosted story: joe and anna", () => {
     expectOk(await call(joeToken, "threadpacket_send", { title: "Tax letter", brief: "Call the tax office on Monday.", to: "anna", idempotency_key: crypto.randomUUID() }));
     const anna = await signIn(team, "anna", annaCode);
     const annaSetup = await text("/connect", anna);
-    expect(cards(annaSetup)).toEqual(["Pick up a packet", "Send a packet"]);
+    expect(firstPackets(annaSetup)).toEqual(Array(5).fill("Continue my packet."));
+    expect(cards(annaSetup)).toEqual(["Send a packet"]);
     expect(annaSetup).not.toContain("Invite my partner");
     hostedStory(annaSetup, "/connect (anna)");
     const packets = await text("/packets", anna);

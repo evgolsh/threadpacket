@@ -152,23 +152,24 @@ function showCommand(cmd: string, url: string): string {
   return esc(cmd).split(esc(url)).join(showAddress(url));
 }
 
-function hostPanel(h: Host, first: boolean, url: string): string {
+/** One assistant's panel: the steps that reach the first packet, ending with what to say; notes and sources fold below. */
+function hostPanel(h: Host, first: boolean, url: string, say: Say): string {
   const steps = h.steps
     .map(
       (s) =>
         `<li><p>${inline(s.text)}</p>${s.command ? `<div class="cmd"><code>${showCommand(s.command, url)}</code>${copyButton(s.command, `Copy the ${h.name} command`)}</div>` : ""}</li>`,
     )
     .join("\n        ");
+  const firstPacket = `<li class="first-packet"><p>Ask ${esc(h.name)}:</p><div class="prompt-row"><p class="say-quote">“${esc(say.quote)}”</p>${copyButton(say.quote, `Copy: ${say.quote}`)}</div></li>`;
   return `<section class="host" id="panel-${h.id}" role="tabpanel" aria-labelledby="tab-${h.id}" tabindex="0"${first ? "" : " data-later"}>
       <div class="host-head"><h3 class="host-name">${esc(h.name)}</h3><span class="badge" title="${esc(LEGEND[h.level])}">${dot(h.level)}${esc(h.tag)}</span></div>
       ${h.intro ? `<p class="host-intro">${inline(h.intro)}</p>` : ""}
       <ol class="steps">
         ${steps}
+        ${firstPacket}
       </ol>
       <div class="foot">
-        ${h.warn ? `<p class="warn-box">${inline(h.warn)}</p>` : ""}
-        ${h.note ? `<p>${inline(h.note)}</p>` : ""}
-        <details class="guide-evidence"><summary>Connection details &amp; source</summary><p class="status">${esc(h.status)}</p><a href="${esc(h.source.url)}" target="_blank" rel="noopener">${esc(h.source.label)} ↗</a></details>
+        <details class="guide-evidence"><summary>${h.warn || h.note ? "Notes &amp; source" : "Connection details &amp; source"}</summary>${h.warn ? `<p class="warn-box">${inline(h.warn)}</p>` : ""}${h.note ? `<p class="note">${inline(h.note)}</p>` : ""}<p class="status">${esc(h.status)}</p><a href="${esc(h.source.url)}" target="_blank" rel="noopener">${esc(h.source.label)} ↗</a></details>
       </div>
     </section>`;
 }
@@ -209,7 +210,7 @@ const PAGE_CSS = `
   .dot.docs { border:1.5px solid var(--muted); }
 
   .host { padding:22px 26px; display:block; }
-  html:not(.js) .host + .host { border-top:1px solid var(--line); }
+  html:not(.js) & .host + .host { border-top:1px solid var(--line); }
   .host[hidden],.js:not(.ready) .host[data-later] { display:none; }
   .host-head { display:flex; align-items:center; justify-content:space-between; gap:10px 14px; flex-wrap:wrap; }
   .host-name { font-size:20px; font-weight:600; letter-spacing:-.025em; }
@@ -227,10 +228,17 @@ const PAGE_CSS = `
   .cmd .btn { min-height:0; border:0; border-left:1px solid var(--line); border-radius:0; box-shadow:none; padding:6px 12px; font-size:12px; }
   .warn-box { padding:9px 12px; margin-bottom:8px; background:var(--warn-bg, #fff7ef); border:1px solid var(--warn); border-radius:6px; color:var(--ink); font-size:12px; line-height:1.48; }
   @media (prefers-color-scheme: dark) { .warn-box { --warn-bg:#2a2017; } }
-  .foot { padding-top:12px; border-top:1px solid var(--line-soft); font-size:12px; color:var(--muted); }
-  .foot p + p { margin-top:5px; }
+  .steps li.first-packet::before { background:var(--ink); border-color:var(--ink); color:var(--ground); }
+  .steps .prompt-row { justify-content:flex-start; gap:12px; margin-top:6px; }
+  .steps .say-quote { font-size:14.5px; padding-top:0; }
+  .steps .prompt-row .btn { min-height:26px; padding:3px 9px; font-size:11px; }
+  .foot { padding-top:8px; border-top:1px solid var(--line-soft); font-size:12px; color:var(--muted); }
   .guide-evidence summary,.privacy summary { cursor:pointer; color:var(--muted); font-size:12px; padding:6px 0; }
+  .guide-evidence .warn-box { margin:6px 0 8px; }
+  .guide-evidence .note { margin:6px 0; line-height:1.5; max-width:72ch; }
   .guide-evidence .status { margin:6px 0 8px; line-height:1.5; max-width:72ch; }
+  html:not(.js) & .rail { display:none; }
+  html:not(.js) & .split { display:block; }
 
   .btn { text-decoration:none; flex:none; min-height:34px; padding:6px 13px; border:1px solid var(--line); border-radius:999px; background:var(--panel); color:var(--ink); font:500 12.5px/1.2 var(--sans); cursor:pointer; display:inline-flex; align-items:center; justify-content:center; }
   .btn:hover { border-color:var(--accent); color:var(--accent); }
@@ -238,8 +246,9 @@ const PAGE_CSS = `
   .btn.primary:hover { background:var(--accent); border-color:var(--accent); color:#fff; }
   .btn.done,.btn.done:hover { background:var(--ok); border-color:var(--ok); color:#fff; }
 
-  /* Compact Hairline Prompt Strip (replaces tall multi-card section) */
-  .say-strip { margin-top:24px; list-style:none; padding:0; display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:20px; }
+  /* Compact Hairline Prompt Strip: what to say after the first packet */
+  .after-title { margin-top:24px; font-size:13px; font-weight:600; letter-spacing:-.01em; }
+  .say-strip { margin-top:10px; list-style:none; padding:0; display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:20px; }
   .say-strip li { border-left:1.5px solid var(--ink); padding-left:14px; display:flex; flex-direction:column; gap:5px; }
   .prompt-row { display:flex; align-items:center; justify-content:space-between; gap:8px; }
   .say-quote { font-size:14.5px; font-weight:600; letter-spacing:-.015em; }
@@ -359,14 +368,19 @@ interface Say {
   copy?: boolean;
 }
 
-function nextSteps(control: boolean, viewer?: Viewer): string {
+/** What to say to the assistant, in order: the first ends each assistant's steps, the rest follow the setup window. */
+function prompts(control: boolean, viewer?: Viewer): [Say, ...Say[]] {
   const [, other, partner] = control ? ["joe", "anna", "partner"] : ["tim", "tom", "teammate"];
   const invite: Say = { label: `Invite your ${partner}`, quote: `Invite my ${partner} to Threadpacket.`, copy: true };
   const send: Say = { label: "Send a packet", quote: `Send a packet to ${other}.` };
   const pickUp: Say = { label: "Pick up a packet", quote: "Continue my packet.", copy: true };
   const solo: Say = { label: "Try it on your own", quote: "Send myself a packet.", copy: true };
-  const says = viewer ? (viewer.admin ? [solo, invite, send] : [pickUp, send]) : [solo, invite, send, pickUp];
-  return `<ol class="say-strip" aria-label="First prompts">
+  return viewer ? (viewer.admin ? [solo, invite, send] : [pickUp, send]) : [solo, invite, send, pickUp];
+}
+
+function nextSteps(says: Say[]): string {
+  return `<h2 class="after-title" id="after-title">After your first packet</h2>
+  <ol class="say-strip" aria-labelledby="after-title">
     ${says
       .map(
         (x, i) =>
@@ -382,6 +396,7 @@ export function connectPage(cfg: Config, nonce: string, opts: { needsSetup?: boo
   const shownUrl = showAddress(url);
   const control = cfg.mode === "control";
   const list = hosts(url, control);
+  const [firstSay, ...laterSays] = prompts(control, opts.viewer);
   const tabs = list
     .map(
       (h, i) =>
@@ -415,7 +430,7 @@ export function connectPage(cfg: Config, nonce: string, opts: { needsSetup?: boo
   </section>`
     : `${opts.viewer
       ? `<header class="app-head"><div><h1 id="connect-title">Assistant setup</h1><p class="lead">Add the server once, then sign in with your access code.</p></div><span class="chip">Username <strong>${esc(opts.viewer.handle)}</strong></span></header>`
-      : `<div class="setup-top"><div><h1 id="connect-title">Connect an assistant</h1><p class="lead">Choose your app, add Threadpacket once, and sign in.</p></div></div>
+      : `<div class="setup-top"><div><h1 id="connect-title">Connect an assistant</h1><p class="lead">Choose your app, add Threadpacket once, and send your first packet.</p></div></div>
          <div class="setup-bar">${control ? `<span><strong>New to Threadpacket? Create your team when you sign in.</strong> No email or personal details needed.</span><a class="btn" href="/join">Create a team →</a>` : `<span><strong>Have your username and access code ready.</strong></span><a class="btn" href="/login">Sign in →</a>`}</div>`}
 
   <section class="dot-stage" id="assistants" aria-label="Assistant setup">
@@ -430,13 +445,13 @@ export function connectPage(cfg: Config, nonce: string, opts: { needsSetup?: boo
           <div class="tabs" role="tablist" aria-label="Assistant" aria-orientation="vertical" hidden>${tabs}</div>
         </div>
         <div class="panels">
-          ${list.map((h, i) => hostPanel(h, i === 0, url)).join("\n          ")}
+          ${list.map((h, i) => hostPanel(h, i === 0, url, firstSay)).join("\n          ")}
         </div>
       </div>
     </div>
   </section>
 
-  ${nextSteps(control, opts.viewer)}
+  ${nextSteps(laterSays)}
 
   <div class="meta-foot">
     <span>File on your phone? Upload it in <a href="/packets">Packets</a>.${!control ? ` <a href="${CONTROL_CENTER_URL}/" target="_blank" rel="noopener">About Threadpacket ↗</a>` : ""}</span>

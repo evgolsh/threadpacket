@@ -44,11 +44,46 @@ describe("connect and homepage (Courier Hybrid)", () => {
     expect(html).not.toContain("—");
   });
 
+  it("each assistant's visible steps end with the first packet to ask for; notes, plan limits and sources fold into details", async () => {
+    const html = await (await SELF.fetch(`${ORIGIN}/connect`)).text();
+    const panels = html.split('<section class="host" ').slice(1).map((p) => p.slice(0, p.indexOf("</section>")));
+    expect(panels.map((p) => /^id="panel-([a-z-]+)"/.exec(p)?.[1])).toEqual(["claude-code", "hermes", "claude", "codex", "chatgpt"]);
+    for (const p of panels) {
+      const name = /<h3 class="host-name">([^<]+)<\/h3>/.exec(p)![1]!;
+      const [steps, folded] = [p.slice(p.indexOf('<ol class="steps">'), p.indexOf("</ol>")), p.slice(p.indexOf("<details"))];
+      expect(p.indexOf('<ol class="steps">'), name).toBeGreaterThan(-1);
+      expect(p.indexOf("</ol>"), name).toBeLessThan(p.indexOf("<details"));
+      const last = steps.slice(steps.lastIndexOf("<li"));
+      expect(last, name).toContain(`<li class="first-packet"><p>Ask ${name}:</p>`);
+      expect(last, name).toContain("“Send myself a packet.”");
+      expect(last, name).toContain('data-copy="Send myself a packet."');
+      expect(steps.match(/<li class="first-packet">/g), name).toHaveLength(1);
+      expect(steps, name).not.toMatch(/warn-box|class="note"|class="status"/);
+      expect(folded, name).toContain('<p class="status">');
+    }
+    const panel = (id: string) => panels.find((p) => p.startsWith(`id="panel-${id}"`))!;
+    const folded = (id: string) => panel(id).slice(panel(id).indexOf("<details"));
+    expect(folded("claude")).toContain("<summary>Notes &amp; source</summary>");
+    expect(folded("claude")).toContain('<p class="warn-box">To attach files');
+    expect(folded("claude")).toContain("On Team or Enterprise plans");
+    expect(folded("chatgpt")).toContain("developer mode enabled");
+    expect(folded("hermes")).toContain("On a headless gateway");
+    expect(folded("codex")).toContain("<summary>Connection details &amp; source</summary>");
+    // Settings a step depends on stay in the visible steps.
+    expect(panel("hermes").slice(0, panel("hermes").indexOf("</ol>"))).toContain("<code>trust: untrusted</code>");
+    expect(panel("codex").slice(0, panel("codex").indexOf('<ol class="steps">'))).toContain('<p class="host-intro">');
+
+    // The prompts after the first packet follow the setup window; without scripts the empty tab rail is not shown.
+    expect(html.indexOf('<h2 class="after-title" id="after-title">After your first packet</h2>')).toBeGreaterThan(html.lastIndexOf('<section class="host" '));
+    expect(html).toContain("html:not(.js) & .rail { display:none; }");
+  });
+
   it("allows only its own nonce script on /connect", async () => {
     const res = await SELF.fetch(`${ORIGIN}/connect`);
     const csp = res.headers.get("content-security-policy") ?? "";
     const nonce = /script-src 'nonce-([^']+)'/.exec(csp)?.[1];
     expect(nonce).toBeTruthy();
+    expect(csp).toBe(`default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}'; font-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`);
     const html = await res.text();
     const scripts = html.match(/<script\b[^>]*>/g) ?? [];
     expect(scripts.length).toBe(2);
