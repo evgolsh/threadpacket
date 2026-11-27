@@ -210,7 +210,8 @@ function connectSteps(cfg: Config): string {
       const steps = h.steps
         .map((s, i) => {
           const lead = s.button ? `[${s.button.label.replace(/\s*↗$/, "")}](${s.button.href}): ${s.button.hint} ` : "";
-          return `${i + 1}. ${lead}${s.text}${s.command ? `\n\n   \`\`\`sh\n   ${s.command}\n   \`\`\`` : ""}`;
+          const tail = s.address ? ` \`${s.address}\`` : s.command ? `\n\n   \`\`\`sh\n   ${s.command}\n   \`\`\`` : "";
+          return `${i + 1}. ${lead}${s.text}${tail}`;
         })
         .join("\n");
       return [`### ${h.name}`, "", h.status, h.intro ? `\n${h.intro}` : "", "", steps, "", h.warn ? `**Note:** ${h.warn}\n` : "", h.note ? `${h.note}\n` : "", `Source: [${h.source.label}](${h.source.url})`]

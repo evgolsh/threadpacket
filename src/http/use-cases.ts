@@ -29,6 +29,8 @@ const PAGE_CSS = `
   .stage-seg label { cursor:pointer; font:500 12px/1 var(--sans); padding:7px 14px; border-radius:999px; color:var(--muted); user-select:none; white-space:nowrap; }
   .stage-seg label:hover { color:var(--ink); }
   .stage-caption { font:500 11px var(--mono); color:var(--muted); letter-spacing:.04em; text-transform:uppercase; }
+  .stage-caption a { color:inherit; text-decoration:underline; text-underline-offset:3px; text-decoration-color:var(--line); }
+  .stage-caption a:hover { color:var(--ink); text-decoration-color:currentColor; }
 
   #stage-live:checked ~ .dot-stage .stage-seg label[for="stage-live"],
   #stage-install:checked ~ .dot-stage .stage-seg label[for="stage-install"] { background:var(--ink); color:var(--ground); }
@@ -158,7 +160,7 @@ ${pageHeader("use-cases", { active, mode: cfg.mode, signedIn: opts.signedIn })}
         <label for="stage-live">Live packet</label>
         <label for="stage-install">Self-host (Cloudflare)</label>
       </div>
-      <span class="stage-caption">${open ? "No email · No phone number · " : "MIT open source · "}Auto-deleted ${esc(retention)}</span>
+      <span class="stage-caption"><a href="${GITHUB_URL}" target="_blank" rel="noopener">MIT open source</a> · ${open ? "No email · " : ""}Auto-deleted ${esc(retention)}</span>
     </div>
 
     <div class="courier-window pane-live">

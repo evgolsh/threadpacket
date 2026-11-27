@@ -15,6 +15,8 @@ const esc = (s: string): string =>
 export interface Step {
   text: string;
   command?: string;
+  /** Compact inline address with a Copy chip (for steps where it's prefilled and shown to verify or copy by hand). */
+  address?: string;
   /** A link shown as the step's main button, with a line on what it opens; `text` then gives the manual route. */
   button?: { label: string; href: string; hint: string };
 }
@@ -93,7 +95,7 @@ export function hosts(url: string, control = false, newcomer = control): Host[] 
           button: { label: "Add to Claude ↗", href: claudeInstallLink(url), hint: "Opens Claude with Threadpacket prefilled." },
           text: "Or add it by hand: [Customize > Connectors](https://claude.ai/customize/connectors) > **+ Add** > **Add custom connector**.",
         },
-        { text: "Check the name **Threadpacket** and this server address, then select **Continue** and **Add**:", command: url },
+        { text: "Check the name **Threadpacket** and this server address, then select **Continue** and **Add**:", address: url },
         { text: `Select **Connect**, ${signIn} and approve access.` },
       ],
       warn: `To attach files, add \`${host}\` to the allowed domains in Claude's Settings > Capabilities. Or upload the file in [Packets](${origin}/packets) and ask Claude to attach it by name.`,
@@ -164,7 +166,7 @@ function hostPanel(h: Host, first: boolean, url: string, say: Say): string {
     .map((s) =>
       s.button
         ? `<li class="button-step"><a class="btn step-button" href="${esc(s.button.href)}" target="_blank" rel="noopener">${esc(s.button.label)}</a><p class="step-hint">${esc(s.button.hint)}</p><p class="step-alt">${inline(s.text)}</p></li>`
-        : `<li><p>${inline(s.text)}</p>${s.command ? `<div class="cmd"><code>${showCommand(s.command, url)}</code>${copyButton(s.command, s.command === url ? "Copy the server address" : `Copy the ${h.name} command`)}</div>` : ""}</li>`,
+        : `<li><p>${inline(s.text)}</p>${s.address ? `<div class="addr-row"><code>${showAddress(s.address)}</code>${copyButton(s.address, "Copy the server address")}</div>` : s.command ? `<div class="cmd"><code>${showCommand(s.command, url)}</code>${copyButton(s.command, s.command === url ? "Copy the server address" : `Copy the ${h.name} command`)}</div>` : ""}</li>`,
     )
     .join("\n        ");
   const firstPacket = `<li class="first-packet"><p>Ask ${esc(h.name)}:</p><div class="prompt-row"><p class="say-quote">“${esc(say.quote)}”</p>${copyButton(say.quote, `Copy: ${say.quote}`)}</div></li>`;
@@ -230,6 +232,9 @@ const PAGE_CSS = `
   .cmd { display:flex; align-items:stretch; margin-top:8px; border:1px solid var(--line); border-radius:6px; background:var(--ground); overflow:hidden; }
   .cmd code { flex:1; min-width:0; padding:8px 12px; font:12px/1.55 var(--mono); white-space:pre-wrap; overflow-wrap:anywhere; align-self:center; }
   .cmd .btn { min-height:0; border:0; border-left:1px solid var(--line); border-radius:0; box-shadow:none; padding:6px 12px; font-size:12px; }
+  .addr-row { display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin-top:6px; }
+  .addr-row code { font:500 12px/1.4 var(--mono); background:var(--ground); border:1px solid var(--line-soft); border-radius:4px; padding:3px 7px; overflow-wrap:anywhere; }
+  .addr-row .btn { min-height:26px; padding:3px 9px; font-size:11px; }
   .warn-box { padding:9px 12px; margin-bottom:8px; background:var(--warn-bg, #fff7ef); border:1px solid var(--warn); border-radius:6px; color:var(--ink); font-size:12px; line-height:1.48; }
   @media (prefers-color-scheme: dark) { .warn-box { --warn-bg:#2a2017; } }
   .steps .btn.step-button { justify-self:start; background:var(--accent); border-color:var(--accent); color:#fff; font-size:13.5px; padding:7px 16px; }

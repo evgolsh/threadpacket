@@ -1,4 +1,5 @@
 import { BRAND_ICON } from "./style";
+import { GITHUB_ICON } from "./assistant-icons";
 import { CONTROL_CENTER_URL } from "../env";
 
 export const GITHUB_URL = "https://github.com/evgolsh/threadpacket";
@@ -20,6 +21,7 @@ export const PAGE_HEADER_CSS = `
   .page-nav { display:flex; gap:6px; align-items:center; font-size:13px; }
   .page-nav a { text-decoration:none; }
   .page-nav .nav-link { display:inline-flex; align-items:center; gap:6px; height:34px; padding:0 12px; border-radius:999px; color:var(--muted); font-weight:500; white-space:nowrap; }
+  .page-nav .nav-link svg { width:15px; height:15px; flex:none; }
   .page-nav .nav-link:hover,.page-nav .nav-link[aria-current=page] { color:var(--ink); background:var(--subtle); }
   .site-button { display:inline-flex; align-items:center; justify-content:center; gap:8px; height:42px; padding:0 19px; border:1px solid var(--line); border-radius:999px; background:var(--panel); color:var(--ink); font:500 14px/1 var(--sans); text-decoration:none; white-space:nowrap; box-shadow:var(--shadow-sm); }
   .site-button svg { width:16px; height:16px; flex:none; }
@@ -80,6 +82,7 @@ export function pageHeader(current: "connect" | "use-cases" = "connect", opts: H
   <header class="page-header site-width"><a class="brand" href="/" aria-label="Threadpacket home">${BRAND_ICON}<span>Threadpacket</span></a>
     <nav class="page-nav" aria-label="Threadpacket">
       ${active ? `<a class="nav-link nav-optional" href="/#install">Self-host</a>${opts.signedIn ? `<a class="nav-link nav-secondary" href="/connect"${current === "connect" ? ' aria-current="page"' : ""}>Assistant setup</a>` : ""}` : ""}
+      <a class="nav-link nav-optional" href="${GITHUB_URL}" target="_blank" rel="noopener">${GITHUB_ICON}<span>GitHub</span></a>
       ${opts.signedIn ? "" : appLink(false, "nav-link nav-secondary")}
       ${button}
     </nav></header>`;

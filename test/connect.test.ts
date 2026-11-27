@@ -118,6 +118,14 @@ describe("connect and homepage (Courier Hybrid)", () => {
     expect(html).toContain("Check the name <strong>Threadpacket</strong> and this server address, then select <strong>Continue</strong> and <strong>Add</strong>:");
     expect(html).toContain("Name it <strong>Threadpacket</strong>, paste this server address, choose <strong>OAuth</strong>, and select <strong>Create as a plugin</strong>:");
     expect(html).not.toContain("server address above");
+    // Claude step 2 uses a compact inline address + Copy chip (step 1 already prefills it); ChatGPT keeps the full box.
+    const panels = html.split('<section class="host" ').slice(1).map((p) => p.slice(0, p.indexOf("</section>")));
+    const claude = panels.find((p) => p.startsWith('id="panel-claude"'))!;
+    const chatgpt = panels.find((p) => p.startsWith('id="panel-chatgpt"'))!;
+    expect(claude).toContain('<div class="addr-row"><code>');
+    expect(claude).not.toContain('<div class="cmd">');
+    expect(chatgpt).toContain('<div class="cmd"><code>');
+    expect(chatgpt).not.toContain('<div class="addr-row">');
   });
 
   it("allows only its own nonce script on /connect", async () => {
@@ -188,7 +196,8 @@ describe("connect and homepage (Courier Hybrid)", () => {
     const html = await res.text();
     expect(html).toContain('<h1 id="hero-title">A mailroom for AI agents.</h1>');
     expect(html).toContain("Another person's agent picks it up and keeps working. Works with Claude, ChatGPT, Codex and Hermes.");
-    expect(html).toContain("No email · No phone number · Auto-deleted after 7 days by default (30 days max)");
+    expect(html).toContain(`<a href="${GITHUB_URL}" target="_blank" rel="noopener">MIT open source</a> · No email · Auto-deleted after 7 days by default (30 days max)`);
+    expect(html).toContain(`<a class="nav-link nav-optional" href="${GITHUB_URL}" target="_blank" rel="noopener">`);
     expect(html).toContain("<dt>Short-lived, no AI</dt>");
     expect(html).toContain("Packets are auto-deleted after 7 days by default (30 days max).");
     expect(html).toContain("<span>EXPIRES IN 7D</span>");
