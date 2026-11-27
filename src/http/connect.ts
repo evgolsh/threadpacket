@@ -515,7 +515,7 @@ export function connectHeaders(nonce: string): Record<string, string> {
   return {
     "content-type": "text/html; charset=utf-8",
     "cache-control": "no-store",
-    "referrer-policy": "no-referrer",
+    "referrer-policy": "same-origin",
     "x-content-type-options": "nosniff",
     "content-security-policy": `default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}'; font-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`,
   };

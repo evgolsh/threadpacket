@@ -36,23 +36,29 @@ export function sourceOf(url: URL, referer: string | null, ownHost: string): str
   return HOST.test(host) ? host : "";
 }
 
+/** True when the request looks like a real browser page navigation rather than a bot, script, or prefetch. */
+export function isBrowserNavigation(req: Request): boolean {
+  if (req.method !== "GET") return false;
+  const h = req.headers;
+  if (h.get("sec-fetch-mode") !== "navigate" || h.get("sec-fetch-dest") !== "document") return false;
+  if (h.get("sec-purpose") || h.get("purpose")) return false;
+  if (AUTOMATED.test(h.get("user-agent") ?? "")) return false;
+  return true;
+}
+
 /**
  * The view a response counts as, or null. Only a browser's own page load is counted: a GET that returned an
  * HTML page, marked by the browser as a navigation to a document, not a prefetch, from a counted page.
  */
 export function pageViewOf(req: Request, res: Response, ownHost: string): PageView | null {
-  if (req.method !== "GET" || res.status !== 200) return null;
+  if (!isBrowserNavigation(req) || res.status !== 200) return null;
   if (!(res.headers.get("content-type") ?? "").startsWith("text/html")) return null;
-  const h = req.headers;
-  if (h.get("sec-fetch-mode") !== "navigate" || h.get("sec-fetch-dest") !== "document") return null;
-  if (h.get("sec-purpose") || h.get("purpose")) return null;
-  if (AUTOMATED.test(h.get("user-agent") ?? "")) return null;
   const url = new URL(req.url);
   if (!COUNTED_PAGES.has(url.pathname)) return null;
   const country = (req as Request & { cf?: { country?: unknown } }).cf?.country;
   return {
     path: url.pathname,
-    source: sourceOf(url, h.get("referer"), ownHost),
+    source: sourceOf(url, req.headers.get("referer"), ownHost),
     country: typeof country === "string" && /^[A-Z][A-Z0-9]$/.test(country) ? country : "",
   };
 }

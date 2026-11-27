@@ -88,6 +88,13 @@ describe("page views", () => {
     expect(sourceOf(at("/"), null, "threadpacket.test")).toBe("");
   });
 
+  it("public pages send referrer-policy: same-origin so internal funnel clicks record self without leaking externally", async () => {
+    for (const path of ["/", "/connect", "/privacy", "/terms", "/about", "/contact"]) {
+      const res = await fetchAs(new Request(`${ORIGIN}${path}`));
+      expect(res.headers.get("referrer-policy"), path).toBe("same-origin");
+    }
+  });
+
   it("cleanup removes page views older than 400 days", async () => {
     await env.DB.prepare("INSERT INTO page_views (day, path, source, country, n) VALUES ('2020-01-01', '/', 'old', '', 5)").run();
     expect((await pruneRecords(env.DB)).page_views).toBeGreaterThanOrEqual(1);

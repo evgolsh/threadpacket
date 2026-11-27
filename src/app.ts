@@ -35,7 +35,7 @@ import { inviteRoutes } from "./http/invite";
 import { mcpCallsIn, recordMcpCalls } from "./store/telemetry";
 import { base64url } from "./domain/ids";
 import { recordEvent } from "./store/events";
-import { countPageView, pageViewOf } from "./store/pageviews";
+import { countPageView, isBrowserNavigation, pageViewOf } from "./store/pageviews";
 import { receiveUpdateCheck } from "./update-check";
 import { DEPLOY_PATH, DEPLOY_URL } from "./http/header";
 import { handleJoin, joinHeaders, joinPage } from "./http/join";
@@ -180,9 +180,11 @@ export function createApp(): Hono<{ Bindings: Env; Variables: Variables }> {
     const page = consoleDocument("Stats", `<div class="login"><div class="panel"><div class="t">Threadpacket in numbers</div><div class="small muted">Counts only, no names. As of ${esc(String(s.as_of))}. JSON at <a class="u" href="/stats.json">/stats.json</a>.</div><dl class="kv">${rows}</dl></div></div>`);
     return new Response(page, { headers: { ...CONSOLE_HEADERS, "cache-control": "public, max-age=300" } });
   });
-  // The pages' Deploy button: counts the click (nothing about who), then sends the browser to Cloudflare.
+  // The pages' Deploy button: counts browser clicks (not crawlers or prefetches), then sends the browser to Cloudflare.
   app.get(DEPLOY_PATH, async (c) => {
-    await recordEvent(c.env.DB, { kind: "visit", name: "deploy", outcome: "ok" }, { unauthenticated: true });
+    if (isBrowserNavigation(c.req.raw)) {
+      await recordEvent(c.env.DB, { kind: "visit", name: "deploy", outcome: "ok" }, { unauthenticated: true });
+    }
     return c.redirect(DEPLOY_URL, 302);
   });
   // The update check's receiving end (src/update-check.ts): 404 unless UPDATE_CHECK_RECEIVER=1.

@@ -132,12 +132,33 @@ describe("the update check (receiving end)", () => {
 });
 
 describe("the counted Deploy link", () => {
-  it("/deploy records a visit and sends the browser to the Deploy to Cloudflare page", async () => {
-    const res = await SELF.fetch(`${ORIGIN}${DEPLOY_PATH}`, { redirect: "manual" });
+  const browser = {
+    "sec-fetch-mode": "navigate",
+    "sec-fetch-dest": "document",
+    "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 Safari/605.1.15",
+  };
+
+  it("/deploy records a browser navigation and sends the browser to the Deploy to Cloudflare page", async () => {
+    const res = await SELF.fetch(`${ORIGIN}${DEPLOY_PATH}`, { headers: browser, redirect: "manual" });
     expect(res.status).toBe(302);
     expect(res.headers.get("location")).toBe(DEPLOY_URL);
     const ev = await env.DB.prepare("SELECT kind, name, outcome FROM events WHERE kind = 'visit'").first();
     expect(ev).toMatchObject({ kind: "visit", name: "deploy", outcome: "ok" });
+  });
+
+  it("/deploy redirects bots, scripts and prefetches without counting them as clicks", async () => {
+    for (const headers of [
+      {},
+      { ...browser, "user-agent": "Mozilla/5.0 (compatible; Googlebot/2.1)" },
+      { ...browser, "sec-purpose": "prefetch" },
+      { ...browser, "sec-fetch-mode": "cors" },
+    ]) {
+      const res = await SELF.fetch(`${ORIGIN}${DEPLOY_PATH}`, { headers, redirect: "manual" });
+      expect(res.status).toBe(302);
+      expect(res.headers.get("location")).toBe(DEPLOY_URL);
+    }
+    const row = await env.DB.prepare("SELECT COUNT(*) AS n FROM events WHERE kind = 'visit' AND name = 'deploy'").first<{ n: number }>();
+    expect(row?.n).toBe(0);
   });
 });
 

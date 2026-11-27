@@ -974,7 +974,7 @@ export const PROSE_HEADERS: Record<string, string> = {
   "content-type": "text/html; charset=utf-8",
   // The header shows Sign in or Packets, so a browser must not reuse another visit's copy.
   "cache-control": "private, no-cache",
-  "referrer-policy": "no-referrer",
+  "referrer-policy": "same-origin",
   "x-content-type-options": "nosniff",
   "content-security-policy": "default-src 'none'; style-src 'unsafe-inline'; font-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
 };

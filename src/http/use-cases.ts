@@ -278,7 +278,7 @@ export function useCasesHeaders(): Record<string, string> {
   return {
     "content-type": "text/html; charset=utf-8",
     "cache-control": "private, no-cache",
-    "referrer-policy": "no-referrer",
+    "referrer-policy": "same-origin",
     "x-content-type-options": "nosniff",
     "content-security-policy":
       "default-src 'none'; style-src 'unsafe-inline'; font-src 'self'; img-src 'self' data:; media-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
