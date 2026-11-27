@@ -15,6 +15,8 @@ const esc = (s: string): string =>
 export interface Step {
   text: string;
   command?: string;
+  /** A link shown as the step's main button, with a line on what it opens; `text` then gives the manual route. */
+  button?: { label: string; href: string; hint: string };
 }
 
 export type Level = "tested" | "partial" | "docs";
@@ -41,7 +43,8 @@ export interface Host {
 const HOSTED_ORDER = ["claude", "chatgpt", "claude-code", "codex", "hermes"];
 
 export function hosts(url: string, control = false): Host[] {
-  const signIn = control ? "your username and access code, or choose **Create a team** if you're new," : "your username and access code";
+  const signIn = control ? "choose **Create a team** if you're new, or sign in with your username and access code," : "sign in with your username and access code";
+  const SignIn = signIn[0]!.toUpperCase() + signIn.slice(1);
   const { host, origin } = new URL(url);
   const list: Host[] = [
     {
@@ -53,7 +56,7 @@ export function hosts(url: string, control = false): Host[] {
       steps: [
         { text: "Add the MCP server:", command: `claude mcp add --transport http --scope user threadpacket ${url}` },
         { text: "In Claude Code, run `/mcp`, choose **threadpacket**, and select **Authenticate**." },
-        { text: `Sign in with ${signIn} and approve access.` },
+        { text: `${SignIn} and approve access.` },
       ],
       source: { label: "Claude Code MCP docs", url: "https://code.claude.com/docs/en/mcp" },
     },
@@ -86,9 +89,12 @@ export function hosts(url: string, control = false): Host[] {
       status:
         "Claude on the web, in the desktop app and in Cowork. Add it once: the connector follows your Claude account to every computer. Tested with Threadpacket in the Claude desktop app on Windows: sign-in, send, and files once the server is an allowed domain (below).",
       steps: [
-        { text: `Open [Add Threadpacket to Claude](${claudeInstallLink(url)}), or go to [Customize > Connectors](https://claude.ai/customize/connectors) and select **+ Add** > **Add custom connector**.` },
+        {
+          button: { label: "Add to Claude ↗", href: claudeInstallLink(url), hint: "Opens Claude with Threadpacket prefilled." },
+          text: "Or add it by hand: [Customize > Connectors](https://claude.ai/customize/connectors) > **+ Add** > **Add custom connector**.",
+        },
         { text: "Confirm the name **Threadpacket** and the server address above, then select **Continue** and **Add**." },
-        { text: `Select **Connect**, sign in with ${signIn} and approve access.` },
+        { text: `Select **Connect**, ${signIn} and approve access.` },
       ],
       warn: `To attach files, add \`${host}\` to the allowed domains in Claude's Settings > Capabilities. Or upload the file in [Packets](${origin}/packets) and ask Claude to attach it by name.`,
       note: "On Team or Enterprise plans, an owner adds the connector first in Organization settings > Connectors.",
@@ -104,7 +110,7 @@ export function hosts(url: string, control = false): Host[] {
         "The Codex app: add Threadpacket once in ChatGPT (ChatGPT tab) and it appears in the Codex app on every computer. Tested with Threadpacket in the Codex app on macOS and Windows: sign-in, send, read and files. The commands below are for the Codex CLI and IDE extension.",
       steps: [
         { text: "Add the server:", command: `codex mcp add threadpacket --url ${url}` },
-        { text: `Sign in with ${signIn} and approve access:`, command: "codex mcp login threadpacket" },
+        { text: `${SignIn} and approve access:`, command: "codex mcp login threadpacket" },
         { text: "Start a new Codex session." },
       ],
       source: { label: "Codex MCP docs", url: "https://learn.chatgpt.com/docs/extend/mcp" },
@@ -118,7 +124,7 @@ export function hosts(url: string, control = false): Host[] {
       steps: [
         { text: "Open [ChatGPT Plugins](https://chatgpt.com/plugins), click **+**, and select **Add custom MCP server**." },
         { text: "Name it **Threadpacket**, paste the server address above, choose **OAuth**, and select **Create as a plugin**." },
-        { text: `Open [personal plugins](https://chatgpt.com/plugins?view=personal), install Threadpacket, then sign in with ${signIn} and approve access.` },
+        { text: `Open [personal plugins](https://chatgpt.com/plugins?view=personal), install Threadpacket, then ${signIn} and approve access.` },
       ],
       note: "Custom MCP servers require a ChatGPT plan or workspace with developer mode enabled.",
       source: { label: "OpenAI: connect an MCP server", url: "https://developers.openai.com/plugins/quickstart" },
@@ -155,9 +161,10 @@ function showCommand(cmd: string, url: string): string {
 /** One assistant's panel: the steps that reach the first packet, ending with what to say; notes and sources fold below. */
 function hostPanel(h: Host, first: boolean, url: string, say: Say): string {
   const steps = h.steps
-    .map(
-      (s) =>
-        `<li><p>${inline(s.text)}</p>${s.command ? `<div class="cmd"><code>${showCommand(s.command, url)}</code>${copyButton(s.command, `Copy the ${h.name} command`)}</div>` : ""}</li>`,
+    .map((s) =>
+      s.button
+        ? `<li><a class="btn step-button" href="${esc(s.button.href)}" target="_blank" rel="noopener">${esc(s.button.label)}</a><p class="step-hint">${esc(s.button.hint)}</p><p class="step-alt">${inline(s.text)}</p></li>`
+        : `<li><p>${inline(s.text)}</p>${s.command ? `<div class="cmd"><code>${showCommand(s.command, url)}</code>${copyButton(s.command, `Copy the ${h.name} command`)}</div>` : ""}</li>`,
     )
     .join("\n        ");
   const firstPacket = `<li class="first-packet"><p>Ask ${esc(h.name)}:</p><div class="prompt-row"><p class="say-quote">“${esc(say.quote)}”</p>${copyButton(say.quote, `Copy: ${say.quote}`)}</div></li>`;
@@ -181,9 +188,10 @@ const PAGE_CSS = `
   .setup-top h1,.inactive-gate h1 { font-size:clamp(28px,3.4vw,40px); font-weight:600; letter-spacing:-.04em; line-height:1.08; }
   .inactive-gate h1 span { color:var(--muted); }
   .lead { color:var(--muted); font-size:14.5px; line-height:1.5; margin-top:4px; }
-  .setup-bar { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px 16px; padding:10px 14px; border:1px solid var(--line); border-radius:10px; background:var(--panel); font-size:13px; margin-bottom:16px; box-shadow:var(--shadow-sm); }
-  .setup-bar span { color:var(--muted); }
-  .setup-bar strong { color:var(--ink); font-weight:600; }
+  .setup-note { margin-bottom:14px; font-size:13px; line-height:1.5; color:var(--muted); }
+  .setup-note strong { color:var(--ink); font-weight:600; }
+  .setup-note a { color:var(--accent); font-weight:500; text-decoration:none; white-space:nowrap; }
+  .setup-note a:hover { text-decoration:underline; }
 
   /* Courier Setup Window inside .dot-stage */
   .courier-setup { background:var(--panel); border:1px solid var(--line); border-radius:12px; overflow:hidden; box-shadow:var(--shadow-md); }
@@ -228,6 +236,10 @@ const PAGE_CSS = `
   .cmd .btn { min-height:0; border:0; border-left:1px solid var(--line); border-radius:0; box-shadow:none; padding:6px 12px; font-size:12px; }
   .warn-box { padding:9px 12px; margin-bottom:8px; background:var(--warn-bg, #fff7ef); border:1px solid var(--warn); border-radius:6px; color:var(--ink); font-size:12px; line-height:1.48; }
   @media (prefers-color-scheme: dark) { .warn-box { --warn-bg:#2a2017; } }
+  .steps .btn.step-button { justify-self:start; background:var(--accent); border-color:var(--accent); color:#fff; font-size:13.5px; padding:7px 16px; }
+  .steps .btn.step-button:hover { filter:brightness(1.07); color:#fff; }
+  .steps .step-hint { margin-top:6px; font-size:12.5px; color:var(--muted); }
+  .steps .step-alt { margin-top:2px; font-size:12.5px; color:var(--muted); }
   .steps li.first-packet::before { background:var(--ink); border-color:var(--ink); color:var(--ground); }
   .steps .prompt-row { justify-content:flex-start; gap:12px; margin-top:6px; }
   .steps .say-quote { font-size:14.5px; padding-top:0; }
@@ -275,10 +287,9 @@ const PAGE_CSS = `
     .dot-stage { padding:12px; }
     .split { display:flex; flex-direction:column; }
     .rail { border-right:0; border-bottom:1px solid var(--line); padding:8px; }
-    .tabs { grid-template-columns:1fr 1fr; }
-    [role=tab] { justify-content:center; min-height:38px; padding:6px 8px; }
+    .tabs { grid-template-columns:repeat(3,minmax(0,1fr)); }
+    [role=tab] { justify-content:center; gap:6px; min-height:38px; padding:6px; font-size:12.5px; }
     [role=tab][aria-selected=true] { box-shadow:none; border-color:var(--accent); }
-    [role=tab]:last-child { grid-column:1/-1; }
     .host { padding:16px; }
     .gate-cards { grid-template-columns:1fr; }
   }
@@ -291,10 +302,9 @@ const PAGE_CSS = `
 const CONSOLE_SPLIT_CSS = `@media(max-width:960px) {
   .shell .connect-content .split { display:flex; flex-direction:column; }
   .shell .connect-content .rail { border-right:0; border-bottom:1px solid var(--line); padding:8px; }
-  .shell .connect-content .tabs { grid-template-columns:1fr 1fr; }
-  .shell .connect-content [role=tab] { justify-content:center; min-height:38px; padding:6px 8px; }
+  .shell .connect-content .tabs { grid-template-columns:repeat(3,minmax(0,1fr)); }
+  .shell .connect-content [role=tab] { justify-content:center; gap:6px; min-height:38px; padding:6px; font-size:12.5px; }
   .shell .connect-content [role=tab][aria-selected=true] { box-shadow:none; border-color:var(--accent); }
-  .shell .connect-content [role=tab]:last-child { grid-column:1/-1; }
 }`;
 
 const CONNECT_SCRIPT = `(function () {
@@ -431,7 +441,7 @@ export function connectPage(cfg: Config, nonce: string, opts: { needsSetup?: boo
     : `${opts.viewer
       ? `<header class="app-head"><div><h1 id="connect-title">Assistant setup</h1><p class="lead">Add the server once, then sign in with your access code.</p></div><span class="chip">Username <strong>${esc(opts.viewer.handle)}</strong></span></header>`
       : `<div class="setup-top"><div><h1 id="connect-title">Connect an assistant</h1><p class="lead">Choose your app, add Threadpacket once, and send your first packet.</p></div></div>
-         <div class="setup-bar">${control ? `<span><strong>New to Threadpacket? Create your team when you sign in.</strong> No email or personal details needed.</span><a class="btn" href="/join">Create a team →</a>` : `<span><strong>Have your username and access code ready.</strong></span><a class="btn" href="/login">Sign in →</a>`}</div>`}
+         <p class="setup-note">${control ? `<strong>New to Threadpacket? Create your team when you sign in.</strong> No email or personal details needed. <a href="/join">Or create it now →</a>` : `<strong>Have your username and access code ready.</strong> <a href="/login">Sign in →</a>`}</p>`}
 
   <section class="dot-stage" id="assistants" aria-label="Assistant setup">
     ${REG_TICKS}

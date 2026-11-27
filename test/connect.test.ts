@@ -78,6 +78,33 @@ describe("connect and homepage (Courier Hybrid)", () => {
     expect(html).toContain("html:not(.js) & .rail { display:none; }");
   });
 
+  it("Claude's first step is an Add to Claude button that opens Claude's connector form prefilled, with the manual route under it", async () => {
+    const html = await (await SELF.fetch(`${ORIGIN}/connect`)).text();
+    const link = `https://claude.ai/customize/connectors?modal=add-custom-connector&amp;connectorName=Threadpacket&amp;connectorUrl=${encodeURIComponent(`${ORIGIN}/mcp`)}`;
+    expect(html).toContain(
+      `<li><a class="btn step-button" href="${link}" target="_blank" rel="noopener">Add to Claude ↗</a><p class="step-hint">Opens Claude with Threadpacket prefilled.</p><p class="step-alt">Or add it by hand: <a href="https://claude.ai/customize/connectors" target="_blank" rel="noopener">Customize &gt; Connectors</a> &gt; <strong>+ Add</strong> &gt; <strong>Add custom connector</strong>.</p></li>`,
+    );
+    expect(html.match(/class="btn step-button"/g)).toHaveLength(1);
+    expect(html).not.toMatch(/one-click|one click/i);
+
+    const md = await (await SELF.fetch(`${ORIGIN}/connect.md`)).text();
+    expect(md).toContain(`1. [Add to Claude](${link.replace(/&amp;/g, "&")}): Opens Claude with Threadpacket prefilled. Or add it by hand:`);
+    expect(md).not.toContain("Shortcut:");
+  });
+
+  it("on the hosted service, signing in leads with Create a team, and the setup note links to creating one now", async () => {
+    const hosted = await (await home("/connect")).text();
+    expect(hosted).toContain("Select <strong>Connect</strong>, choose <strong>Create a team</strong> if you&#39;re new, or sign in with your username and access code, and approve access.");
+    expect(hosted).toContain("Choose <strong>Create a team</strong> if you&#39;re new, or sign in with your username and access code, and approve access.");
+    expect(hosted).toContain('<p class="setup-note"><strong>New to Threadpacket? Create your team when you sign in.</strong> No email or personal details needed. <a href="/join">Or create it now →</a></p>');
+    expect(hosted).not.toContain('class="btn" href="/join"');
+
+    const own = await (await SELF.fetch(`${ORIGIN}/connect`)).text();
+    expect(own).toContain("Select <strong>Connect</strong>, sign in with your username and access code and approve access.");
+    expect(own).not.toContain("Create a team");
+    expect(own).toContain('<p class="setup-note"><strong>Have your username and access code ready.</strong> <a href="/login">Sign in →</a></p>');
+  });
+
   it("allows only its own nonce script on /connect", async () => {
     const res = await SELF.fetch(`${ORIGIN}/connect`);
     const csp = res.headers.get("content-security-policy") ?? "";

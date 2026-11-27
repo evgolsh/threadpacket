@@ -207,9 +207,13 @@ function connectSteps(cfg: Config): string {
   const f = facts(cfg);
   return hosts(f.mcp, f.hosted)
     .map((h: Host) => {
-      const steps = h.steps.map((s, i) => `${i + 1}. ${s.text}${s.command ? `\n\n   \`\`\`sh\n   ${s.command}\n   \`\`\`` : ""}`).join("\n");
-      const claudeLink = h.id === "claude" ? `\nShortcut: [open the dialog with the name and address filled in](${claudeInstallLink(f.mcp)}), then continue from step 4.\n` : "";
-      return [`### ${h.name}`, "", h.status, h.intro ? `\n${h.intro}` : "", "", steps, claudeLink, h.warn ? `**Note:** ${h.warn}\n` : "", h.note ? `${h.note}\n` : "", `Source: [${h.source.label}](${h.source.url})`]
+      const steps = h.steps
+        .map((s, i) => {
+          const lead = s.button ? `[${s.button.label.replace(/\s*↗$/, "")}](${s.button.href}): ${s.button.hint} ` : "";
+          return `${i + 1}. ${lead}${s.text}${s.command ? `\n\n   \`\`\`sh\n   ${s.command}\n   \`\`\`` : ""}`;
+        })
+        .join("\n");
+      return [`### ${h.name}`, "", h.status, h.intro ? `\n${h.intro}` : "", "", steps, "", h.warn ? `**Note:** ${h.warn}\n` : "", h.note ? `${h.note}\n` : "", `Source: [${h.source.label}](${h.source.url})`]
         .filter((x) => x !== "")
         .join("\n");
     })
