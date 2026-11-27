@@ -81,8 +81,8 @@ export function pageHeader(current: "connect" | "use-cases" = "connect", opts: H
   return `<a href="#main" class="skip-link">Skip to content</a>
   <header class="page-header site-width"><a class="brand" href="/" aria-label="Threadpacket home">${BRAND_ICON}<span>Threadpacket</span></a>
     <nav class="page-nav" aria-label="Threadpacket">
-      ${active ? `<a class="nav-link nav-optional" href="/#install">Self-host</a>${opts.signedIn ? `<a class="nav-link nav-secondary" href="/connect"${current === "connect" ? ' aria-current="page"' : ""}>Assistant setup</a>` : ""}` : ""}
       <a class="nav-link nav-optional" href="${GITHUB_URL}" target="_blank" rel="noopener">${GITHUB_ICON}<span>GitHub</span></a>
+      ${active ? `<a class="nav-link nav-optional" href="/#install">Self-host</a>${opts.signedIn ? `<a class="nav-link nav-secondary" href="/connect"${current === "connect" ? ' aria-current="page"' : ""}>Assistant setup</a>` : ""}` : ""}
       ${opts.signedIn ? "" : appLink(false, "nav-link nav-secondary")}
       ${button}
     </nav></header>`;
