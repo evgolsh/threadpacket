@@ -4,6 +4,7 @@ import worker from "../src/index";
 import { ORIGIN } from "./helpers";
 import { FONT_FILES } from "../src/http/style";
 import { DEPLOY_PATH, INSTALL_URL, GITHUB_URL } from "../src/http/header";
+import { CONSOLE_CSS } from "../src/console/html";
 
 /** The homepage is served by the control center (THREADPACKET_MODE=control); a private install sends / to /connect. */
 const control = { ...env, THREADPACKET_MODE: "control" };
@@ -126,6 +127,16 @@ describe("connect and homepage (Courier Hybrid)", () => {
     expect(claude).not.toContain('<div class="cmd">');
     expect(chatgpt).toContain('<div class="cmd"><code>');
     expect(chatgpt).not.toContain('<div class="addr-row">');
+  });
+
+  it("the setup page's classes are its own, so the console's styles don't change its layout when signed in", async () => {
+    const html = await (await SELF.fetch(`${ORIGIN}/connect`)).text();
+    const body = html.slice(html.indexOf('class="site-width connect-content"'), html.indexOf("</main>"));
+    const used = new Set([...body.matchAll(/class="([^"]+)"/g)].flatMap((m) => m[1]!.split(/\s+/)));
+    const consoleClasses = new Set([...CONSOLE_CSS.replace(/url\([^)]*\)/g, "").matchAll(/\.([a-zA-Z][\w-]*)/g)].map((m) => m[1]));
+    // These names are shared, and the console's rules for them don't change the setup page's layout.
+    // Check any name added to this list the same way.
+    expect([...used].filter((c) => consoleClasses.has(c)).sort()).toEqual(["btn", "dot", "eyebrow", "kv", "lead", "note", "sr-only"]);
   });
 
   it("allows only its own nonce script on /connect", async () => {

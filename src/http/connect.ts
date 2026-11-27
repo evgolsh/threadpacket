@@ -210,7 +210,7 @@ const PAGE_CSS = `
   .tab-logo svg { width:16px; height:16px; }
   .tab-logo.hermes { background:currentColor; -webkit-mask:url("${HERMES_MASK}") center/contain no-repeat; mask:url("${HERMES_MASK}") center/contain no-repeat; }
 
-  .dot { display:inline-block; flex:none; width:7px; height:7px; border-radius:50%; }
+  .dot { display:inline-block; flex:none; width:7px; height:7px; border-radius:50%; background:transparent; }
   .dot.tested { background:var(--ok); }
   .dot.partial { border:1.5px solid var(--ok); background:linear-gradient(90deg,var(--ok) 50%,transparent 50%); }
   .dot.docs { border:1.5px solid var(--muted); }
