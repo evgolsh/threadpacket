@@ -93,7 +93,7 @@ export function hosts(url: string, control = false): Host[] {
           button: { label: "Add to Claude ↗", href: claudeInstallLink(url), hint: "Opens Claude with Threadpacket prefilled." },
           text: "Or add it by hand: [Customize > Connectors](https://claude.ai/customize/connectors) > **+ Add** > **Add custom connector**.",
         },
-        { text: "Confirm the name **Threadpacket** and the server address above, then select **Continue** and **Add**." },
+        { text: "Check the name **Threadpacket** and this server address, then select **Continue** and **Add**:", command: url },
         { text: `Select **Connect**, ${signIn} and approve access.` },
       ],
       warn: `To attach files, add \`${host}\` to the allowed domains in Claude's Settings > Capabilities. Or upload the file in [Packets](${origin}/packets) and ask Claude to attach it by name.`,
@@ -123,7 +123,7 @@ export function hosts(url: string, control = false): Host[] {
       status: "Add it once: the connection follows your ChatGPT account to chatgpt.com and the Codex app, on every computer. Tested with Threadpacket on Windows: sign-in, send and files, used from the Codex app.",
       steps: [
         { text: "Open [ChatGPT Plugins](https://chatgpt.com/plugins), click **+**, and select **Add custom MCP server**." },
-        { text: "Name it **Threadpacket**, paste the server address above, choose **OAuth**, and select **Create as a plugin**." },
+        { text: "Name it **Threadpacket**, paste this server address, choose **OAuth**, and select **Create as a plugin**:", command: url },
         { text: `Open [personal plugins](https://chatgpt.com/plugins?view=personal), install Threadpacket, then ${signIn} and approve access.` },
       ],
       note: "Custom MCP servers require a ChatGPT plan or workspace with developer mode enabled.",
@@ -158,13 +158,13 @@ function showCommand(cmd: string, url: string): string {
   return esc(cmd).split(esc(url)).join(showAddress(url));
 }
 
-/** One assistant's panel: the steps that reach the first packet, ending with what to say; notes and sources fold below. */
+/** One assistant's panel: the steps that reach the first packet, ending with what to say; a warning shows under them, notes and sources fold below. */
 function hostPanel(h: Host, first: boolean, url: string, say: Say): string {
   const steps = h.steps
     .map((s) =>
       s.button
         ? `<li><a class="btn step-button" href="${esc(s.button.href)}" target="_blank" rel="noopener">${esc(s.button.label)}</a><p class="step-hint">${esc(s.button.hint)}</p><p class="step-alt">${inline(s.text)}</p></li>`
-        : `<li><p>${inline(s.text)}</p>${s.command ? `<div class="cmd"><code>${showCommand(s.command, url)}</code>${copyButton(s.command, `Copy the ${h.name} command`)}</div>` : ""}</li>`,
+        : `<li><p>${inline(s.text)}</p>${s.command ? `<div class="cmd"><code>${showCommand(s.command, url)}</code>${copyButton(s.command, s.command === url ? "Copy the server address" : `Copy the ${h.name} command`)}</div>` : ""}</li>`,
     )
     .join("\n        ");
   const firstPacket = `<li class="first-packet"><p>Ask ${esc(h.name)}:</p><div class="prompt-row"><p class="say-quote">“${esc(say.quote)}”</p>${copyButton(say.quote, `Copy: ${say.quote}`)}</div></li>`;
@@ -176,7 +176,8 @@ function hostPanel(h: Host, first: boolean, url: string, say: Say): string {
         ${firstPacket}
       </ol>
       <div class="foot">
-        <details class="guide-evidence"><summary>${h.warn || h.note ? "Notes &amp; source" : "Connection details &amp; source"}</summary>${h.warn ? `<p class="warn-box">${inline(h.warn)}</p>` : ""}${h.note ? `<p class="note">${inline(h.note)}</p>` : ""}<p class="status">${esc(h.status)}</p><a href="${esc(h.source.url)}" target="_blank" rel="noopener">${esc(h.source.label)} ↗</a></details>
+        ${h.warn ? `<p class="warn-box">${inline(h.warn)}</p>` : ""}
+        <details class="guide-evidence"><summary>${h.note ? "Notes &amp; source" : "Connection details &amp; source"}</summary>${h.note ? `<p class="note">${inline(h.note)}</p>` : ""}<p class="status">${esc(h.status)}</p><a href="${esc(h.source.url)}" target="_blank" rel="noopener">${esc(h.source.label)} ↗</a></details>
       </div>
     </section>`;
 }
@@ -195,11 +196,6 @@ const PAGE_CSS = `
 
   /* Courier Setup Window inside .dot-stage */
   .courier-setup { background:var(--panel); border:1px solid var(--line); border-radius:12px; overflow:hidden; box-shadow:var(--shadow-md); }
-  .stamp-addr { display:inline-flex; align-items:center; gap:8px; max-width:100%; }
-  .stamp-addr code { font:500 11.5px/1.3 var(--mono); color:var(--ground); text-transform:none; letter-spacing:0; overflow-wrap:anywhere; }
-  .btn-stamp { padding:3px 10px; border-radius:999px; border:1px solid rgba(255,255,255,.28); background:rgba(255,255,255,.12); color:var(--ground); font:500 11px/1.2 var(--sans); cursor:pointer; text-transform:none; letter-spacing:0; }
-  .btn-stamp:hover { background:var(--accent); border-color:var(--accent); color:#fff; }
-  .btn-stamp.done { background:var(--ok); border-color:var(--ok); color:#fff; }
 
   .split { display:grid; grid-template-columns:204px minmax(0,1fr); min-height:340px; }
   .rail { border-right:1px solid var(--line); padding:12px 10px; background:color-mix(in srgb,var(--subtle) 45%,var(--panel)); }
@@ -246,7 +242,7 @@ const PAGE_CSS = `
   .steps .prompt-row .btn { min-height:26px; padding:3px 9px; font-size:11px; }
   .foot { padding-top:8px; border-top:1px solid var(--line-soft); font-size:12px; color:var(--muted); }
   .guide-evidence summary,.privacy summary { cursor:pointer; color:var(--muted); font-size:12px; padding:6px 0; }
-  .guide-evidence .warn-box { margin:6px 0 8px; }
+  .foot .warn-box { margin:4px 0 6px; }
   .guide-evidence .note { margin:6px 0; line-height:1.5; max-width:72ch; }
   .guide-evidence .status { margin:6px 0 8px; line-height:1.5; max-width:72ch; }
   html:not(.js) & .rail { display:none; }
@@ -403,7 +399,6 @@ function nextSteps(says: Say[]): string {
 export function connectPage(cfg: Config, nonce: string, opts: { needsSetup?: boolean; viewer?: Viewer } = {}): string {
   const active = !opts.needsSetup;
   const url = cfg.mcpResource;
-  const shownUrl = showAddress(url);
   const control = cfg.mode === "control";
   const list = hosts(url, control);
   const [firstSay, ...laterSays] = prompts(control, opts.viewer);
@@ -446,10 +441,6 @@ export function connectPage(cfg: Config, nonce: string, opts: { needsSetup?: boo
   <section class="dot-stage" id="assistants" aria-label="Assistant setup">
     ${REG_TICKS}
     <div class="courier-setup">
-      <div class="stamp-bar">
-        <span>MCP server</span>
-        <span class="stamp-addr"><code>${shownUrl}</code>${copyButton(url, "Copy the server address", "btn-stamp")}</span>
-      </div>
       <div class="split">
         <div class="rail">
           <div class="tabs" role="tablist" aria-label="Assistant" aria-orientation="vertical" hidden>${tabs}</div>

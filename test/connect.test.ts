@@ -64,7 +64,10 @@ describe("connect and homepage (Courier Hybrid)", () => {
     const panel = (id: string) => panels.find((p) => p.startsWith(`id="panel-${id}"`))!;
     const folded = (id: string) => panel(id).slice(panel(id).indexOf("<details"));
     expect(folded("claude")).toContain("<summary>Notes &amp; source</summary>");
-    expect(folded("claude")).toContain('<p class="warn-box">To attach files');
+    // The allowed-domains warning shows between Claude's steps and the folded notes.
+    const claude = panel("claude");
+    expect(claude.slice(claude.indexOf("</ol>"), claude.indexOf("<details"))).toContain('<p class="warn-box">To attach files');
+    expect(folded("claude")).not.toContain("warn-box");
     expect(folded("claude")).toContain("On Team or Enterprise plans");
     expect(folded("chatgpt")).toContain("developer mode enabled");
     expect(folded("hermes")).toContain("On a headless gateway");
@@ -103,6 +106,18 @@ describe("connect and homepage (Courier Hybrid)", () => {
     expect(own).toContain("Select <strong>Connect</strong>, sign in with your username and access code and approve access.");
     expect(own).not.toContain("Create a team");
     expect(own).toContain('<p class="setup-note"><strong>Have your username and access code ready.</strong> <a href="/login">Sign in →</a></p>');
+  });
+
+  it("shows the server address with a Copy button in the steps that paste it, and no separate server bar", async () => {
+    const html = await (await SELF.fetch(`${ORIGIN}/connect`)).text();
+    expect(html).not.toContain('<div class="stamp-bar">');
+    const copies = [...html.matchAll(/<section class="host" id="panel-([a-z-]+)"|data-copy="([^"]+)" aria-label="Copy the server address"/g)];
+    const withAddress = copies.reduce<string[]>((ids, m, i) => (m[2] ? [...ids, copies.slice(0, i).reverse().find((c) => c[1])![1]!] : ids), []);
+    expect(withAddress).toEqual(["claude", "chatgpt"]);
+    expect(html.match(new RegExp(`data-copy="${ORIGIN}/mcp" aria-label="Copy the server address"`, "g"))).toHaveLength(2);
+    expect(html).toContain("Check the name <strong>Threadpacket</strong> and this server address, then select <strong>Continue</strong> and <strong>Add</strong>:");
+    expect(html).toContain("Name it <strong>Threadpacket</strong>, paste this server address, choose <strong>OAuth</strong>, and select <strong>Create as a plugin</strong>:");
+    expect(html).not.toContain("server address above");
   });
 
   it("allows only its own nonce script on /connect", async () => {
